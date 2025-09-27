@@ -10,15 +10,7 @@ object LogManager {
     }
 
     fun logError(message: String, throwable: Throwable? = null) {
-        if (throwable != null) {
-            Log.e(TAG, message, throwable)
-        } else {
-            Log.e(TAG, message)
-        }
-    }
-
-    fun logWarning(message: String) {
-        Log.w(TAG, message)
+        Log.e(TAG, message, throwable)
     }
 
     fun logDebug(message: String) {

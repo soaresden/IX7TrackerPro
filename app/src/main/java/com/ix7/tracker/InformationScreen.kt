@@ -1,9 +1,8 @@
 package com.ix7.tracker
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -11,154 +10,158 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InformationScreen(
     scooterData: ScooterData,
-    onBack: () -> Unit
+    isConnected: Boolean
 ) {
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Button(
-                onClick = onBack,
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
-            ) {
-                Text("←", color = Color.White, fontSize = 18.sp)
-            }
-
+        item {
+            // Titre principal
             Text(
-                text = "Informations",
-                color = Color.White,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
+                text = if (isConnected) "Informations M0Robot" else "Informations (Déconnecté)",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (isConnected) MaterialTheme.colorScheme.primary else Color.Gray
             )
-
-            Spacer(modifier = Modifier.width(60.dp))
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        item {
+            // Section Données temps réel
+            InfoCard(
+                title = "Données temps réel",
+                items = listOf(
+                    InfoItem("Kilométrage total", formatDistance(scooterData.odometer)),
+                    InfoItem("Température du scooter", "${scooterData.temperature}°C : ${scooterData.temperature}°C"),
+                    InfoItem("Temps de conduite total", scooterData.totalRideTime),
+                    InfoItem("Vitesse actuelle", formatSpeed(scooterData.speed)),
+                    InfoItem("Puissance restante", formatPercentage(scooterData.battery))
+                )
+            )
+        }
 
-        // Points de connexion
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            repeat(3) {
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .background(
-                            if (scooterData.isConnected) Color.Red else Color.Gray,
-                            shape = androidx.compose.foundation.shape.CircleShape
-                        )
+        item {
+            // Section Batterie
+            InfoCard(
+                title = "Batterie",
+                items = listOf(
+                    InfoItem("Température de la batterie", "--"),
+                    InfoItem("État de la batterie", "${scooterData.batteryState}"),
+                    InfoItem("Courant", "${formatCurrent(scooterData.current)} : ${formatCurrent(scooterData.current)}"),
+                    InfoItem("Tension", formatVoltage(scooterData.voltage)),
+                    InfoItem("Puissance", formatPower(scooterData.power))
+                )
+            )
+        }
+
+        item {
+            // Section Système
+            InfoCard(
+                title = "Système",
+                items = listOf(
+                    InfoItem("Codes d'erreur", "${scooterData.errorCodes}"),
+                    InfoItem("Code d'avertissement", "${scooterData.warningCodes}"),
+                    InfoItem("Version électrique", scooterData.firmwareVersion),
+                    InfoItem("Version Bluetooth", scooterData.bluetoothVersion),
+                    InfoItem("Numéro de version de l'application", scooterData.appVersion)
+                )
+            )
+        }
+
+        if (isConnected) {
+            item {
+                // Section Statistiques calculées
+                val totalHours = parseTotalHours(scooterData.totalRideTime)
+                val avgSpeed = calculateAverageSpeed(scooterData.odometer, totalHours)
+                val estimatedSavings = calculateEstimatedSavings(scooterData.odometer)
+
+                InfoCard(
+                    title = "Statistiques",
+                    items = listOf(
+                        InfoItem("Vitesse moyenne", formatSpeed(avgSpeed)),
+                        InfoItem("Économies estimées", estimatedSavings),
+                        InfoItem("Consommation", "${formatPower(calculateConsumption(scooterData.power, scooterData.odometer))}/km")
+                    )
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Toutes les informations
-        InformationItem(
-            label = "Kilométrage total",
-            value = "${String.format("%.1f", scooterData.totalDistance)}Km",
-            isHighlighted = true
-        )
-
-        InformationItem(
-            label = "Température du scooter",
-            value = "${String.format("%.1f", scooterData.scooterTemperature)}°C : ${String.format("%.1f", scooterData.scooterTemperature)}°C"
-        )
-
-        InformationItem(
-            label = "Temps de conduite total",
-            value = scooterData.ridingTime
-        )
-
-        InformationItem(
-            label = "Vitesse actuelle",
-            value = "${String.format("%.1f", scooterData.currentSpeed)}Km/h"
-        )
-
-        InformationItem(
-            label = "Puissance restante",
-            value = "${scooterData.batteryLevel}%"
-        )
-
-        InformationItem(
-            label = "Température de la batterie",
-            value = if (scooterData.batteryTemperature == 0) "--" else "${scooterData.batteryTemperature}°C"
-        )
-
-        InformationItem(
-            label = "État de la batterie",
-            value = "${scooterData.batteryStatus}"
-        )
-
-        InformationItem(
-            label = "Courant",
-            value = "${String.format("%.1f", scooterData.current)}A : ${String.format("%.1f", scooterData.current)}A"
-        )
-
-        InformationItem(
-            label = "Tension",
-            value = "${String.format("%.1f", scooterData.voltage)}V"
-        )
-
-        InformationItem(
-            label = "Puissance",
-            value = "${String.format("%.1f", scooterData.power)}W"
-        )
-
-        // Espacement pour les codes d'erreur
-        Spacer(modifier = Modifier.height(16.dp))
-
-        InformationItem(
-            label = "Codes d'erreur",
-            value = "${scooterData.errorCode}"
-        )
-
-        InformationItem(
-            label = "Code d'avertissement",
-            value = "${scooterData.warningCode}"
-        )
-
-        // Espacement pour les versions
-        Spacer(modifier = Modifier.height(16.dp))
-
-        InformationItem(
-            label = "Version électrique",
-            value = scooterData.electricVersion
-        )
-
-        InformationItem(
-            label = "Version Bluetooth",
-            value = scooterData.bluetoothVersion
-        )
-
-        InformationItem(
-            label = "Numéro de version de l'application",
-            value = scooterData.appVersion
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
+        if (!isConnected) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Non connecté",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Connectez-vous à un scooter pour voir les données en temps réel",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
-fun InformationItem(
+fun InfoCard(
+    title: String,
+    items: List<InfoItem>
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            items.forEachIndexed { index, item ->
+                InfoRow(
+                    label = item.label,
+                    value = item.value,
+                    isHighlighted = item.isHighlighted
+                )
+
+                if (index < items.size - 1) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun InfoRow(
     label: String,
     value: String,
     isHighlighted: Boolean = false
@@ -166,28 +169,30 @@ fun InformationItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
-            color = if (isHighlighted) Color.Red else Color.White,
-            fontSize = 16.sp,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (isHighlighted) MaterialTheme.colorScheme.error
+            else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f)
         )
 
         Text(
             text = value,
-            color = Color.White,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Medium
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = if (isHighlighted) MaterialTheme.colorScheme.error
+            else MaterialTheme.colorScheme.onSurface
         )
     }
-
-    // Ligne de séparation
-    HorizontalDivider(
-        color = Color.Gray.copy(alpha = 0.3f),
-        thickness = 1.dp
-    )
 }
+
+data class InfoItem(
+    val label: String,
+    val value: String,
+    val isHighlighted: Boolean = false
+)

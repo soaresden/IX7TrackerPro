@@ -21,8 +21,7 @@ class BluetoothLe(private val context: Context) {
     private var onConnectionStateChangedListener: ((Boolean) -> Unit)? = null
 
     init {
-        val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-        bluetoothAdapter = bluetoothManager.adapter
+        bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
     }
 
     fun setOnDataReceivedListener(listener: (ByteArray) -> Unit) {

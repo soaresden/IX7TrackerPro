@@ -15,8 +15,7 @@ object Utils {
     }
 
     fun isMQRobot(deviceName: String): Boolean {
-        return deviceName.contains("MQRobot", ignoreCase = true) ||
-                deviceName.contains("M0Robot", ignoreCase = true)
+        return deviceName.contains("MQRobot", ignoreCase = true)
     }
 
     fun getCurrentTime(): String {
