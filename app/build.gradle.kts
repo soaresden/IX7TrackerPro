@@ -44,10 +44,6 @@ android {
         compose = true
     }
 
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.8"
-    }
-
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -56,27 +52,27 @@ android {
 }
 
 dependencies {
+    // Core Android
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.activity:activity-compose:1.8.2")
+    implementation("androidx.appcompat:appcompat:1.6.1")
 
-    // Compose BOM
+    // Compose BOM - Gère toutes les versions Compose
     implementation(platform("androidx.compose:compose-bom:2024.02.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
 
-    // Navigation Compose
-    implementation("androidx.navigation:navigation-compose:2.7.6")
-
-    // ViewModel Compose
+    // Lifecycle pour Compose
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
 
-    // Coroutines
+    // Coroutines pour Kotlin
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
-    // Permissions
+    // Permission handling
     implementation("androidx.activity:activity-ktx:1.8.2")
 
     // Testing
@@ -85,6 +81,8 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.02.00"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+
+    // Debug tools
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

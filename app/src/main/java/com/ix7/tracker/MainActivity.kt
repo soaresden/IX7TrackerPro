@@ -1,8 +1,12 @@
 package com.ix7.tracker
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,10 +18,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var bluetoothManager: BluetoothManager
+
+    // Gestionnaire des permissions
+    private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val allGranted = permissions.values.all { it }
+        if (allGranted) {
+            bluetoothManager.startDiscovery()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,325 +56,387 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         bluetoothManager.cleanup()
     }
-}
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun TrackerApp(bluetoothManager: BluetoothManager) {
-    var selectedTab by remember { mutableIntStateOf(0) }
+    /**
+     * Demande les permissions nécessaires
+     */
+    private fun requestPermissions() {
+        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            arrayOf(
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.BLUETOOTH_CONNECT,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            )
+        } else {
+            arrayOf(
+                Manifest.permission.BLUETOOTH,
+                Manifest.permission.BLUETOOTH_ADMIN,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            )
+        }
 
-    // Observer les états du Bluetooth
-    val discoveredDevices by bluetoothManager.discoveredDevices.collectAsState()
-    val connectionState by bluetoothManager.connectionState.collectAsState()
-    val receivedData by bluetoothManager.receivedData.collectAsState()
+        val missingPermissions = permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
 
-    // Démarrer la découverte au lancement si pas connecté
-    LaunchedEffect(Unit) {
-        if (connectionState == ConnectionState.DISCONNECTED) {
+        if (missingPermissions.isNotEmpty()) {
+            permissionLauncher.launch(missingPermissions.toTypedArray())
+        } else {
             bluetoothManager.startDiscovery()
         }
     }
 
-    Column {
-        // Navigation en haut
-        TabRow(selectedTabIndex = selectedTab) {
-            Tab(
-                selected = selectedTab == 0,
-                onClick = { selectedTab = 0 },
-                text = { Text("Connexion") }
-            )
-            Tab(
-                selected = selectedTab == 1,
-                onClick = { selectedTab = 1 },
-                text = { Text("Informations") }
-            )
-        }
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    fun TrackerApp(bluetoothManager: BluetoothManager) {
+        var selectedTab by remember { mutableIntStateOf(0) }
 
-        // Contenu selon l'onglet sélectionné
-        when (selectedTab) {
-            0 -> BluetoothConnectionScreen(
-                bluetoothManager = bluetoothManager,
-                discoveredDevices = discoveredDevices,
-                connectionState = connectionState
-            )
-            1 -> {
-                val scooterData = receivedData ?: ScooterData()
-                ScooterInformationScreen(
-                    scooterData = scooterData,
-                    isConnected = connectionState == ConnectionState.CONNECTED
+        // Observer les états du Bluetooth
+        val discoveredDevices by bluetoothManager.discoveredDevices.collectAsState()
+        val connectionState by bluetoothManager.connectionState.collectAsState()
+        val receivedData by bluetoothManager.receivedData.collectAsState()
+
+        Column {
+            // Navigation en haut
+            TabRow(selectedTabIndex = selectedTab) {
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    text = { Text("Connexion") }
                 )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    text = { Text("Informations") }
+                )
+                Tab(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
+                    text = { Text("Logs") }
+                )
+            }
+
+            // Contenu selon l'onglet sélectionné
+            when (selectedTab) {
+                0 -> BluetoothConnectionScreen(
+                    bluetoothManager = bluetoothManager,
+                    discoveredDevices = discoveredDevices,
+                    connectionState = connectionState,
+                    onRequestPermissions = { requestPermissions() }
+                )
+                1 -> {
+                    val scooterData = receivedData ?: ScooterData()
+                    InformationScreen(
+                        scooterData = scooterData,
+                        isConnected = connectionState == ConnectionState.CONNECTED
+                    )
+                }
+                2 -> LogScreen()
             }
         }
     }
-}
 
-@Composable
-fun BluetoothConnectionScreen(
-    bluetoothManager: BluetoothManager,
-    discoveredDevices: List<BluetoothDeviceInfo>,
-    connectionState: ConnectionState
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+    @Composable
+    fun BluetoothConnectionScreen(
+        bluetoothManager: BluetoothManager,
+        discoveredDevices: List<BluetoothDeviceInfo>,
+        connectionState: ConnectionState,
+        onRequestPermissions: () -> Unit
     ) {
-        // État de connexion
-        ConnectionStatusCard(connectionState)
-
-        // Boutons de contrôle
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Button(
-                onClick = { bluetoothManager.startDiscovery() },
-                enabled = connectionState != ConnectionState.SCANNING,
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(if (connectionState == ConnectionState.SCANNING) "Recherche..." else "Rechercher")
-            }
+            // État de connexion
+            ConnectionStatusCard(connectionState)
 
-            Button(
-                onClick = { bluetoothManager.stopDiscovery() },
-                enabled = connectionState == ConnectionState.SCANNING,
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("Arrêter")
-            }
-        }
-
-        if (connectionState == ConnectionState.CONNECTED) {
-            Button(
-                onClick = { bluetoothManager.disconnect() },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
-            ) {
-                Text("Déconnecter", color = Color.White)
-            }
-        }
-
-        // Liste des appareils découverts
-        if (discoveredDevices.isNotEmpty()) {
-            Text(
-                text = "Appareils trouvés:",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            LazyColumn {
-                items(discoveredDevices) { device ->
-                    DeviceCard(
-                        device = device,
-                        onConnect = { bluetoothManager.connectToDevice(device.address) },
-                        isConnectable = connectionState == ConnectionState.DISCONNECTED
+            // Vérifier si le Bluetooth est activé
+            if (!bluetoothManager.isBluetoothEnabled()) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color.Red.copy(alpha = 0.1f))
+                ) {
+                    Text(
+                        text = "Bluetooth désactivé. Veuillez l'activer dans les paramètres.",
+                        modifier = Modifier.padding(16.dp),
+                        color = Color.Red,
+                        fontWeight = FontWeight.Bold
                     )
+                }
+            } else {
+                // Boutons de contrôle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { onRequestPermissions() },
+                        enabled = connectionState != ConnectionState.SCANNING,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(if (connectionState == ConnectionState.SCANNING) "Recherche..." else "Rechercher")
+                    }
+
+                    Button(
+                        onClick = { bluetoothManager.stopDiscovery() },
+                        enabled = connectionState == ConnectionState.SCANNING,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Arrêter")
+                    }
+                }
+
+                if (connectionState == ConnectionState.CONNECTED) {
+                    Button(
+                        onClick = { bluetoothManager.disconnect() },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                    ) {
+                        Text("Déconnecter", color = Color.White)
+                    }
+                }
+
+                // Liste des appareils découverts
+                if (discoveredDevices.isNotEmpty()) {
+                    Text(
+                        text = "Appareils trouvés:",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    LazyColumn {
+                        items(discoveredDevices) { device ->
+                            DeviceCard(
+                                device = device,
+                                onConnect = { bluetoothManager.connectToDevice(device.address) },
+                                isConnectable = connectionState == ConnectionState.DISCONNECTED
+                            )
+                        }
+                    }
+                } else if (connectionState == ConnectionState.SCANNING) {
+                    Card {
+                        Text(
+                            text = "Recherche d'appareils M0Robot en cours...",
+                            modifier = Modifier.padding(16.dp),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
         }
     }
-}
 
-@Composable
-fun ConnectionStatusCard(connectionState: ConnectionState) {
-    val (statusText, statusColor) = when (connectionState) {
-        ConnectionState.DISCONNECTED -> "Déconnecté" to Color.Gray
-        ConnectionState.SCANNING -> "Recherche en cours..." to Color.Blue
-        ConnectionState.CONNECTING -> "Connexion..." to Color(0xFFFF9800) // Orange color
-        ConnectionState.CONNECTED -> "Connecté" to Color.Green
-        ConnectionState.ERROR -> "Erreur de connexion" to Color.Red
+    @Composable
+    fun ConnectionStatusCard(connectionState: ConnectionState) {
+        val (statusText, statusColor) = when (connectionState) {
+            ConnectionState.DISCONNECTED -> "Déconnecté" to Color.Gray
+            ConnectionState.SCANNING -> "Recherche en cours..." to Color.Blue
+            ConnectionState.CONNECTING -> "Connexion..." to Color.Orange
+            ConnectionState.CONNECTED -> "Connecté" to Color.Green
+            ConnectionState.ERROR -> "Erreur de connexion" to Color.Red
+        }
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = statusColor.copy(alpha = 0.1f))
+        ) {
+            Text(
+                text = "État: $statusText",
+                modifier = Modifier.padding(16.dp),
+                color = statusColor,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 
-    Card(
-        colors = CardDefaults.cardColors(containerColor = statusColor.copy(alpha = 0.1f))
+    @Composable
+    fun DeviceCard(
+        device: BluetoothDeviceInfo,
+        onConnect: () -> Unit,
+        isConnectable: Boolean
     ) {
-        Text(
-            text = "État: $statusText",
-            modifier = Modifier.padding(16.dp),
-            color = statusColor,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-@Composable
-fun DeviceCard(
-    device: BluetoothDeviceInfo,
-    onConnect: () -> Unit,
-    isConnectable: Boolean
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-    ) {
-        Row(
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(vertical = 4.dp)
         ) {
-            Column {
-                Text(
-                    text = device.name ?: "Appareil inconnu",
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = device.address,
-                    fontSize = 12.sp,
-                    color = Color.Gray
-                )
-            }
-
-            Button(
-                onClick = onConnect,
-                enabled = isConnectable
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Connecter")
+                Column {
+                    Text(
+                        text = device.name ?: "Appareil inconnu",
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = device.address,
+                        fontSize = 12.sp,
+                        color = Color.Gray
+                    )
+                }
+
+                Button(
+                    onClick = onConnect,
+                    enabled = isConnectable
+                ) {
+                    Text("Connecter")
+                }
             }
         }
     }
-}
 
-@Composable
-fun ScooterInformationScreen(
-    scooterData: ScooterData,
-    isConnected: Boolean
-) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    @Composable
+    fun InformationScreen(
+        scooterData: ScooterData,
+        isConnected: Boolean
     ) {
-        item {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // État de connexion
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isConnected)
-                        MaterialTheme.colorScheme.primaryContainer
-                    else
-                        MaterialTheme.colorScheme.errorContainer
+                    containerColor = if (isConnected) Color.Green.copy(alpha = 0.1f)
+                    else Color.Red.copy(alpha = 0.1f)
                 )
             ) {
                 Text(
                     text = if (isConnected) "Scooter connecté" else "Scooter déconnecté",
                     modifier = Modifier.padding(16.dp),
-                    color = if (isConnected)
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    else
-                        MaterialTheme.colorScheme.onErrorContainer,
+                    color = if (isConnected) Color.Green else Color.Red,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp
                 )
             }
-        }
 
-        item {
-            Text(
-                text = "Données temps réel",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
+            if (isConnected) {
+                // Données principales
+                Card {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Données en temps réel",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
 
-        item {
-            InfoCard("Vitesse actuelle", "${String.format("%.1f", scooterData.speed)} km/h")
-        }
+                        InfoRow("Vitesse actuelle", Utils.formatSpeed(scooterData.speed))
+                        InfoRow("Batterie restante", "${scooterData.battery}%")
+                        InfoRow("Tension", Utils.formatVoltage(scooterData.voltage))
+                        InfoRow("Courant", Utils.formatCurrent(scooterData.current))
+                        InfoRow("Puissance", Utils.formatPower(scooterData.power))
+                        InfoRow("Température", Utils.formatTemperature(scooterData.temperature))
+                        InfoRow("Kilométrage total", Utils.formatDistance(scooterData.odometer))
+                        InfoRow("Temps de conduite", scooterData.totalRideTime)
+                        InfoRow("Source de données", scooterData.dataSource)
+                    }
+                }
 
-        item {
-            InfoCard("Puissance restante", "${String.format("%.1f", scooterData.battery)}%")
-        }
+                // Données système
+                Card {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Informations système",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
 
-        item {
-            InfoCard("Kilométrage total", "${String.format("%.1f", scooterData.odometer)} km")
-        }
+                        InfoRow("État batterie", scooterData.batteryState.toString())
+                        InfoRow("Codes d'erreur", scooterData.errorCodes.toString())
+                        InfoRow("Codes d'avertissement", scooterData.warningCodes.toString())
+                        InfoRow("Version firmware", scooterData.firmwareVersion)
+                        InfoRow("Version Bluetooth", scooterData.bluetoothVersion)
+                        InfoRow("Version app", scooterData.appVersion)
+                    }
+                }
 
-        item {
-            InfoCard("Température du scooter", "${scooterData.temperature}°C")
-        }
-
-        item {
-            InfoCard("Temps de conduite total", scooterData.totalRideTime)
-        }
-
-        item {
-            Text(
-                text = "Batterie",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-
-        item {
-            InfoCard("Tension", "${String.format("%.1f", scooterData.voltage)}V")
-        }
-
-        item {
-            InfoCard("Courant", "${String.format("%.1f", scooterData.current)}A")
-        }
-
-        item {
-            InfoCard("Puissance", "${String.format("%.1f", scooterData.power)}W")
-        }
-
-        item {
-            Text(
-                text = "Système",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-
-        item {
-            InfoCard("Codes d'erreur", scooterData.errorCodes.toString())
-        }
-
-        item {
-            InfoCard("Code d'avertissement", scooterData.warningCodes.toString())
-        }
-
-        item {
-            InfoCard("Version électrique", scooterData.firmwareVersion)
-        }
-
-        item {
-            InfoCard("Version Bluetooth", scooterData.bluetoothVersion)
-        }
-
-        item {
-            InfoCard("Version de l'application", scooterData.appVersion)
+                // Données brutes si disponibles
+                scooterData.rawData?.let { rawData ->
+                    Card {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "Données brutes",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Hex: ${Utils.bytesToHex(rawData)}",
+                                fontSize = 12.sp,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                            )
+                        }
+                    }
+                }
+            } else {
+                Card {
+                    Text(
+                        text = "Connectez-vous à un scooter M0Robot pour voir les informations de télémétrie.",
+                        modifier = Modifier.padding(16.dp),
+                        fontSize = 16.sp
+                    )
+                }
+            }
         }
     }
-}
 
-@Composable
-fun InfoCard(label: String, value: String) {
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    @Composable
+    fun InfoRow(label: String, value: String) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
                 text = label,
-                fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.onSurface
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f)
             )
             Text(
                 text = value,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium,
+                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
+        }
+    }
+
+    @Composable
+    fun LogScreen() {
+        Card(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text(
+                    text = "Logs système",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Les logs détaillés sont disponibles dans Logcat (Android Studio) avec le tag 'BluetoothManager'",
+                    fontSize = 14.sp
+                )
+            }
         }
     }
 }

@@ -1,3 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">IX7 Tracker Pro</string>
+    <string name="app_name">IX7 Tracker</string>
+
+    <!-- Onglets -->
+    <string name="tab_connection">Connexion</string>
+    <string name="tab_information">Informations</string>
+    <string name="tab_logs">Logs</string>
+
+    <!-- États de connexion -->
+    <string name="status_disconnected">Déconnecté</string>
+    <string name="status_scanning">Recherche en cours...</string>
+    <string name="status_connecting">Connexion...</string>
+    <string name="status_connected">Connecté</string>
+    <string name="status_error">Erreur de connexion</string>
+
+    <!-- Boutons -->
+    <string name="btn_search">Rechercher</string>
+    <string name="btn_stop">Arrêter</string>
+    <string name="btn_connect">Connecter</string>
+    <string name="btn_disconnect">Déconnecter</string>
+
+    <!-- Messages -->
+    <string name="bluetooth_disabled">Bluetooth désactivé. Veuillez l\'activer dans les paramètres.</string>
+    <string name="devices_found">Appareils trouvés:</string>
+    <string name="searching_devices">Recherche d\'appareils M0Robot en cours...</string>
+    <string name="no_device_connected">Aucun scooter connecté</string>
+    <string name="scooter_connected">Scooter M0Robot connecté</string>
+    <string name="connect_message">Connectez-vous à un scooter M0Robot dans l\'onglet \'Connexion\' pour voir les informations de télémétrie en temps réel.</string>
+
+    <!-- Sections d'informations -->
+    <string name="section_speed">Vitesse et mouvement</string>
+    <string name="section_battery">Batterie</string>
+    <string name="section_electrical">Données électriques</string>
+    <string name="section_trip">Informations de trajet</string>
+    <string name="section_system">Informations système</string>
+    <string name="section_raw_data">Données brutes</string>
+    <string name="section_statistics">Statistiques calculées</string>
+
+    <!-- Labels de données -->
+    <string name="label_current_speed">Vitesse actuelle</string>
+    <string name="label_total_distance">Kilométrage total</string>
+    <string name="label_total_time">Temps de conduite total</string>
+    <string name="label_average_speed">Vitesse moyenne</string>
+    <string name="label_battery_remaining">Charge restante</string>
+    <string name="label_battery_state">État de la batterie</string>
+    <string name="label_battery_temperature">Température batterie</string>
+    <string name="label_estimated_range">Autonomie estimée</string>
+    <string name="label_voltage">Tension</string>
+    <string name="label_current">Courant</string>
+    <string name="label_power">Puissance</string>
+    <string name="label_consumption">Consommation</string>
+    <string name="label_estimated_savings">Économies estimées</string>
+    <string name="label_co2_saved">CO₂ économisé</string>
+    <string name="label_error_codes">Codes d\'erreur</string>
+    <string name="label_warning_codes">Codes d\'avertissement</string>
+    <string name="label_firmware_version">Version firmware</string>
+    <string name="label_bluetooth_version">Version Bluetooth</string>
+    <string name="label_data_source">Source de données</string>
+    <string name="label_efficiency">Efficacité énergétique</string>
+    <string name="label_ride_hours">Temps de conduite (heures)</string>
+    <string name="label_time_remaining">Temps restant estimé</string>
+
+    <!-- Valeurs par défaut -->
+    <string name="value_none">Aucun</string>
+    <string name="value_unknown">Inconnu</string>
+    <string name="unknown_device">Appareil inconnu</string>
+
+    <!-- Permissions -->
+    <string name="permission_bluetooth_required">Permissions Bluetooth requises</string>
+    <string name="permission_location_required">Permission de localisation requise pour le scan Bluetooth</string>
 </resources>

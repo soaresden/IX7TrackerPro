@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Thème principal ultra simplifié -->
+    <style name="Theme.IX7Tracker" parent="Theme.AppCompat.Light.DarkActionBar">
+        <!-- Couleurs de base seulement -->
+        <item name="colorPrimary">#0061A4</item>
+        <item name="colorPrimaryDark">#00497D</item>
+        <item name="colorAccent">#0061A4</item>
 
-    <style name="Theme.IX7TrackerPro" parent="android:Theme.Material.Light.NoActionBar" />
+        <!-- Barre de statut -->
+        <item name="android:statusBarColor">@color/bluetooth_connected</item>
+    </style>
 </resources>
