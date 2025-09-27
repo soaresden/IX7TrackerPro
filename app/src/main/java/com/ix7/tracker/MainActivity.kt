@@ -48,7 +48,7 @@ class MainActivity : ComponentActivity() {
 fun TrackerApp(bluetoothManager: BluetoothManager) {
     var selectedTab by remember { mutableIntStateOf(0) }
 
-    // Observer les états du Bluetooth - UTILISE LES BONNES PROPRIÉTÉS
+    // Observer les états du Bluetooth
     val discoveredDevices by bluetoothManager.discoveredDevices.collectAsState()
     val connectionState by bluetoothManager.connectionState.collectAsState()
     val receivedData by bluetoothManager.receivedData.collectAsState()
@@ -84,7 +84,7 @@ fun TrackerApp(bluetoothManager: BluetoothManager) {
             )
             1 -> {
                 val scooterData = receivedData ?: ScooterData()
-                InformationScreen(
+                ScooterInformationScreen(
                     scooterData = scooterData,
                     isConnected = connectionState == ConnectionState.CONNECTED
                 )
@@ -108,7 +108,7 @@ fun BluetoothConnectionScreen(
         // État de connexion
         ConnectionStatusCard(connectionState)
 
-        // Boutons de contrôle - UTILISE LES BONNES MÉTHODES
+        // Boutons de contrôle
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -166,7 +166,7 @@ fun ConnectionStatusCard(connectionState: ConnectionState) {
     val (statusText, statusColor) = when (connectionState) {
         ConnectionState.DISCONNECTED -> "Déconnecté" to Color.Gray
         ConnectionState.SCANNING -> "Recherche en cours..." to Color.Blue
-        ConnectionState.CONNECTING -> "Connexion..." to Color(0xFFFFA500)
+        ConnectionState.CONNECTING -> "Connexion..." to Color(0xFFFF9800) // Orange color
         ConnectionState.CONNECTED -> "Connecté" to Color.Green
         ConnectionState.ERROR -> "Erreur de connexion" to Color.Red
     }
@@ -219,6 +219,147 @@ fun DeviceCard(
             ) {
                 Text("Connecter")
             }
+        }
+    }
+}
+
+@Composable
+fun ScooterInformationScreen(
+    scooterData: ScooterData,
+    isConnected: Boolean
+) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isConnected)
+                        MaterialTheme.colorScheme.primaryContainer
+                    else
+                        MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Text(
+                    text = if (isConnected) "Scooter connecté" else "Scooter déconnecté",
+                    modifier = Modifier.padding(16.dp),
+                    color = if (isConnected)
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    else
+                        MaterialTheme.colorScheme.onErrorContainer,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            }
+        }
+
+        item {
+            Text(
+                text = "Données temps réel",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        item {
+            InfoCard("Vitesse actuelle", "${String.format("%.1f", scooterData.speed)} km/h")
+        }
+
+        item {
+            InfoCard("Puissance restante", "${String.format("%.1f", scooterData.battery)}%")
+        }
+
+        item {
+            InfoCard("Kilométrage total", "${String.format("%.1f", scooterData.odometer)} km")
+        }
+
+        item {
+            InfoCard("Température du scooter", "${scooterData.temperature}°C")
+        }
+
+        item {
+            InfoCard("Temps de conduite total", scooterData.totalRideTime)
+        }
+
+        item {
+            Text(
+                text = "Batterie",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        item {
+            InfoCard("Tension", "${String.format("%.1f", scooterData.voltage)}V")
+        }
+
+        item {
+            InfoCard("Courant", "${String.format("%.1f", scooterData.current)}A")
+        }
+
+        item {
+            InfoCard("Puissance", "${String.format("%.1f", scooterData.power)}W")
+        }
+
+        item {
+            Text(
+                text = "Système",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        item {
+            InfoCard("Codes d'erreur", scooterData.errorCodes.toString())
+        }
+
+        item {
+            InfoCard("Code d'avertissement", scooterData.warningCodes.toString())
+        }
+
+        item {
+            InfoCard("Version électrique", scooterData.firmwareVersion)
+        }
+
+        item {
+            InfoCard("Version Bluetooth", scooterData.bluetoothVersion)
+        }
+
+        item {
+            InfoCard("Version de l'application", scooterData.appVersion)
+        }
+    }
+}
+
+@Composable
+fun InfoCard(label: String, value: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = value,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }

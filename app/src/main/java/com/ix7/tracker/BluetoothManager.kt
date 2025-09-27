@@ -1,16 +1,31 @@
 package com.ix7.tracker
 
+import android.Manifest
+import android.annotation.SuppressLint
+import android.bluetooth.*
+import android.bluetooth.le.*
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import android.util.Log
+import androidx.core.app.ActivityCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.*
 
+/**
+ * Gestionnaire Bluetooth pour la communication avec le scooter M0Robot
+ */
+@SuppressLint("MissingPermission")
 class BluetoothManager(private val context: Context) {
 
-    private val bluetoothLe = BluetoothLe(context)
-    private val bluetoothDeviceScanner = BluetoothDeviceScanner(context)
+    private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
+    private var bluetoothGatt: BluetoothGatt? = null
+    private var bluetoothLeScanner: BluetoothLeScanner? = null
+    private var isScanning = false
 
-    // États observables pour l'UI
+    // États observables
     private val _discoveredDevices = MutableStateFlow<List<BluetoothDeviceInfo>>(emptyList())
     val discoveredDevices: StateFlow<List<BluetoothDeviceInfo>> = _discoveredDevices.asStateFlow()
 
@@ -20,30 +35,45 @@ class BluetoothManager(private val context: Context) {
     private val _receivedData = MutableStateFlow<ScooterData?>(null)
     val receivedData: StateFlow<ScooterData?> = _receivedData.asStateFlow()
 
-    init {
-        // Configurer les listeners
-        bluetoothLe.setOnConnectionStateChangedListener { isConnected ->
-            _connectionState.value = if (isConnected) {
-                ConnectionState.CONNECTED
-            } else {
-                ConnectionState.DISCONNECTED
+    // Callback pour la découverte des appareils (API moderne)
+    private val scanCallback = object : ScanCallback() {
+        override fun onScanResult(callbackType: Int, result: ScanResult?) {
+            result?.device?.let { device ->
+                val deviceName = device.name
+                Log.d("BluetoothManager", "Device found: ${deviceName ?: "Unknown"} - ${device.address}")
+
+                // Filtrer les appareils M0Robot/scooters
+                if (deviceName != null && isScooterDevice(deviceName)) {
+                    val deviceInfo = BluetoothDeviceInfo(
+                        name = deviceName,
+                        address = device.address
+                    )
+
+                    val currentDevices = _discoveredDevices.value.toMutableList()
+                    if (currentDevices.none { it.address == deviceInfo.address }) {
+                        currentDevices.add(deviceInfo)
+                        _discoveredDevices.value = currentDevices
+                        Log.d("BluetoothManager", "Scooter added: $deviceName")
+                    }
+                }
             }
         }
 
-        bluetoothLe.setOnDataReceivedListener { data ->
-            LogManager.logInfo("Données M0Robot reçues: ${data.joinToString(" ") { "%02X".format(it) }}")
-            parseM0RobotData(data)
+        override fun onScanFailed(errorCode: Int) {
+            Log.e("BluetoothManager", "Scan failed with error: $errorCode")
+            _connectionState.value = ConnectionState.ERROR
+            isScanning = false
         }
     }
 
-    fun startDiscovery() {
-        LogManager.logInfo("Démarrage de la découverte...")
-        _discoveredDevices.value = emptyList()
-        _connectionState.value = ConnectionState.SCANNING
+    // Callback pour l'API legacy (Android < 5.0)
+    private val legacyScanCallback = BluetoothAdapter.LeScanCallback { device, rssi, scanRecord ->
+        val deviceName = device?.name
+        Log.d("BluetoothManager", "Legacy scan - Device found: ${deviceName ?: "Unknown"} - ${device?.address}")
 
-        bluetoothDeviceScanner.startScan { device, rssi ->
+        if (device != null && deviceName != null && isScooterDevice(deviceName)) {
             val deviceInfo = BluetoothDeviceInfo(
-                name = device.name,
+                name = deviceName,
                 address = device.address
             )
 
@@ -51,139 +81,237 @@ class BluetoothManager(private val context: Context) {
             if (currentDevices.none { it.address == deviceInfo.address }) {
                 currentDevices.add(deviceInfo)
                 _discoveredDevices.value = currentDevices
-                LogManager.logInfo("Appareil ajouté: ${device.name} (${device.address}) - Signal: ${rssi}dBm")
+                Log.d("BluetoothManager", "Legacy scooter added: $deviceName")
             }
         }
     }
 
-    fun stopDiscovery() {
-        bluetoothDeviceScanner.stopScan()
-        if (_connectionState.value == ConnectionState.SCANNING) {
-            _connectionState.value = ConnectionState.DISCONNECTED
+    // Callback GATT pour la communication
+    private val gattCallback = object : BluetoothGattCallback() {
+        override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
+            when (newState) {
+                BluetoothProfile.STATE_CONNECTED -> {
+                    Log.d("BluetoothManager", "Connected to GATT server")
+                    _connectionState.value = ConnectionState.CONNECTED
+                    gatt?.discoverServices()
+                }
+                BluetoothProfile.STATE_DISCONNECTED -> {
+                    Log.d("BluetoothManager", "Disconnected from GATT server")
+                    _connectionState.value = ConnectionState.DISCONNECTED
+                    bluetoothGatt = null
+                }
+            }
+        }
+
+        override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                Log.d("BluetoothManager", "Services discovered")
+                startDataReading()
+            }
+        }
+
+        override fun onCharacteristicRead(
+            gatt: BluetoothGatt?,
+            characteristic: BluetoothGattCharacteristic?,
+            status: Int
+        ) {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                characteristic?.value?.let { data ->
+                    parseScooterData(data)
+                }
+            }
+        }
+
+        override fun onCharacteristicChanged(
+            gatt: BluetoothGatt?,
+            characteristic: BluetoothGattCharacteristic?
+        ) {
+            characteristic?.value?.let { data ->
+                parseScooterData(data)
+            }
         }
     }
 
+    /**
+     * Vérifie si le nom de l'appareil correspond à un scooter
+     */
+    private fun isScooterDevice(deviceName: String): Boolean {
+        val scooterPrefixes = listOf(
+            "M0", "H1", "M1", "Mini", "Plus", "X1", "X3", "M6",
+            "GoKart", "A6", "MI", "N3MTenbot", "miniPLUS_",
+            "MiniPro", "SFSO", "V5Robot", "EO STREET", "XRIDER",
+            "TECAR", "MAX", "i10", "NEXRIDE", "E-WHEELS", "E12",
+            "E9PRO", "T10", "MQRobot"
+        )
+
+        return scooterPrefixes.any { prefix ->
+            deviceName.startsWith(prefix, ignoreCase = true)
+        }
+    }
+
+    /**
+     * Démarre la découverte des appareils Bluetooth
+     */
+    fun startDiscovery() {
+        Log.d("BluetoothManager", "Starting discovery...")
+
+        if (!hasBluetoothPermission()) {
+            Log.e("BluetoothManager", "Missing Bluetooth permissions")
+            _connectionState.value = ConnectionState.ERROR
+            return
+        }
+
+        if (bluetoothAdapter == null) {
+            Log.e("BluetoothManager", "Bluetooth adapter is null")
+            _connectionState.value = ConnectionState.ERROR
+            return
+        }
+
+        if (!bluetoothAdapter.isEnabled) {
+            Log.e("BluetoothManager", "Bluetooth is not enabled")
+            _connectionState.value = ConnectionState.ERROR
+            return
+        }
+
+        // Nettoyer la liste précédente
+        _discoveredDevices.value = emptyList()
+        _connectionState.value = ConnectionState.SCANNING
+        isScanning = true
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                // Utiliser l'API moderne
+                bluetoothLeScanner = bluetoothAdapter.bluetoothLeScanner
+                val settings = ScanSettings.Builder()
+                    .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                    .build()
+
+                bluetoothLeScanner?.startScan(null, settings, scanCallback)
+                Log.d("BluetoothManager", "Modern scan started")
+            } else {
+                // Utiliser l'API legacy
+                bluetoothAdapter.startLeScan(legacyScanCallback)
+                Log.d("BluetoothManager", "Legacy scan started")
+            }
+        } catch (e: Exception) {
+            Log.e("BluetoothManager", "Failed to start scan: ${e.message}")
+            _connectionState.value = ConnectionState.ERROR
+            isScanning = false
+        }
+    }
+
+    /**
+     * Arrête la découverte des appareils
+     */
+    fun stopDiscovery() {
+        Log.d("BluetoothManager", "Stopping discovery...")
+
+        if (!isScanning) return
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                bluetoothLeScanner?.stopScan(scanCallback)
+            } else {
+                bluetoothAdapter?.stopLeScan(legacyScanCallback)
+            }
+
+            isScanning = false
+            if (_connectionState.value == ConnectionState.SCANNING) {
+                _connectionState.value = ConnectionState.DISCONNECTED
+            }
+            Log.d("BluetoothManager", "Scan stopped")
+        } catch (e: Exception) {
+            Log.e("BluetoothManager", "Failed to stop scan: ${e.message}")
+        }
+    }
+
+    /**
+     * Se connecte à un appareil Bluetooth
+     */
     fun connectToDevice(address: String) {
-        stopDiscovery()
-        _connectionState.value = ConnectionState.CONNECTING
-        bluetoothLe.connect(address)
+        Log.d("BluetoothManager", "Connecting to device: $address")
+
+        if (!hasBluetoothPermission()) return
+
+        stopDiscovery() // Arrêter le scan avant la connexion
+
+        val device = bluetoothAdapter?.getRemoteDevice(address)
+        if (device != null) {
+            _connectionState.value = ConnectionState.CONNECTING
+            bluetoothGatt = device.connectGatt(context, false, gattCallback)
+        } else {
+            Log.e("BluetoothManager", "Device not found: $address")
+            _connectionState.value = ConnectionState.ERROR
+        }
     }
 
+    /**
+     * Déconnecte l'appareil actuel
+     */
     fun disconnect() {
-        bluetoothLe.disconnect()
+        Log.d("BluetoothManager", "Disconnecting...")
+        bluetoothGatt?.disconnect()
+        bluetoothGatt?.close()
+        bluetoothGatt = null
+        _connectionState.value = ConnectionState.DISCONNECTED
     }
 
+    /**
+     * Nettoie les ressources
+     */
     fun cleanup() {
         stopDiscovery()
         disconnect()
     }
 
-    private fun parseM0RobotData(data: ByteArray) {
-        if (data.size < 3) {
-            LogManager.logInfo("Données M0Robot trop courtes: ${data.size} bytes")
-            return
+    /**
+     * Vérifie les permissions Bluetooth
+     */
+    private fun hasBluetoothPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Android 12+
+            ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
+                    ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+        } else {
+            // Android < 12
+            ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH) == PackageManager.PERMISSION_GRANTED &&
+                    ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_ADMIN) == PackageManager.PERMISSION_GRANTED &&
+                    ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         }
+    }
 
-        // Vérifier que c'est une réponse M0Robot (commence par 0x55)
-        if (data[0] != 0x55.toByte()) {
-            LogManager.logInfo("Pas une réponse M0Robot valide: premier byte = ${data[0]}")
-            return
-        }
+    /**
+     * Démarre la lecture des données du scooter
+     */
+    private fun startDataReading() {
+        // TODO: Implémenter la lecture des caractéristiques spécifiques du M0Robot
+        // Pour l'instant, générer des données de test
+        generateTestData()
+    }
 
-        val commandType = data[1].toInt() and 0xFF
-        LogManager.logInfo("Réponse M0Robot de type: 0x${commandType.toString(16).uppercase()}")
+    /**
+     * Parse les données reçues du scooter
+     */
+    private fun parseScooterData(data: ByteArray) {
+        // TODO: Implémenter le décodage du protocole M0Robot
+        // Pour l'instant, générer des données de test
+        generateTestData()
+    }
 
-        val currentData = _receivedData.value ?: ScooterData()
-        var updatedData = currentData
-
-        when (commandType) {
-            0x31 -> {
-                // Réponse vitesse/batterie
-                if (data.size >= 10) {
-                    val speed = ((data[2].toInt() and 0xFF) shl 8 or (data[3].toInt() and 0xFF)) / 100f
-                    val battery = (data[4].toInt() and 0xFF).toFloat()
-
-                    updatedData = currentData.copy(
-                        speed = speed,
-                        battery = battery
-                    )
-                    LogManager.logInfo("M0Robot - Vitesse: ${speed}km/h, Batterie: ${battery}%")
-                }
-            }
-
-            0x32 -> {
-                // Réponse voltage/courant
-                if (data.size >= 10) {
-                    val voltage = ((data[2].toInt() and 0xFF) shl 8 or (data[3].toInt() and 0xFF)) / 100f
-                    val current = ((data[4].toInt() and 0xFF) shl 8 or (data[5].toInt() and 0xFF)) / 100f
-
-                    updatedData = currentData.copy(
-                        voltage = voltage,
-                        current = current,
-                        power = voltage * current
-                    )
-                    LogManager.logInfo("M0Robot - Tension: ${voltage}V, Courant: ${current}A")
-                }
-            }
-
-            0x33 -> {
-                // Réponse température/odomètre
-                if (data.size >= 10) {
-                    val temperature = (data[2].toInt() and 0xFF) - 40 // Offset de température
-                    val odometer = ((data[4].toInt() and 0xFF) shl 24 or
-                            (data[5].toInt() and 0xFF) shl 16 or
-                            (data[6].toInt() and 0xFF) shl 8 or
-                            (data[7].toInt() and 0xFF)) / 1000f
-
-                    updatedData = currentData.copy(
-                        temperature = temperature,
-                        odometer = odometer
-                    )
-                    LogManager.logInfo("M0Robot - Température: ${temperature}°C, Odomètre: ${odometer}km")
-                }
-            }
-
-            0x34 -> {
-                // Réponse infos système
-                if (data.size >= 8) {
-                    val errorCodes = data[2].toInt() and 0xFF
-                    val warningCodes = data[3].toInt() and 0xFF
-                    val batteryState = data[4].toInt() and 0xFF
-
-                    updatedData = currentData.copy(
-                        errorCodes = errorCodes,
-                        warningCodes = warningCodes,
-                        batteryState = batteryState
-                    )
-                    LogManager.logInfo("M0Robot - Erreurs: $errorCodes, Avertissements: $warningCodes")
-                }
-            }
-
-            0x35 -> {
-                // Réponse version firmware
-                if (data.size >= 8) {
-                    val majorVersion = data[2].toInt() and 0xFF
-                    val minorVersion = data[3].toInt() and 0xFF
-                    val patchVersion = data[4].toInt() and 0xFF
-
-                    val firmwareVersion = "$majorVersion.$minorVersion.$patchVersion"
-
-                    updatedData = currentData.copy(
-                        firmwareVersion = firmwareVersion
-                    )
-                    LogManager.logInfo("M0Robot - Firmware: $firmwareVersion")
-                }
-            }
-
-            else -> {
-                LogManager.logInfo("Type de réponse M0Robot non reconnu: 0x${commandType.toString(16).uppercase()}")
-            }
-        }
-
-        // Mettre à jour les données seulement si on a reçu de vraies données
-        if (updatedData != currentData) {
-            _receivedData.value = updatedData
-            LogManager.logInfo("Données M0Robot mises à jour")
-        }
+    /**
+     * Génère des données de test pour le développement
+     */
+    private fun generateTestData() {
+        val testData = ScooterData(
+            speed = (0..25).random().toFloat(),
+            battery = (20..100).random().toFloat(),
+            voltage = (36f + (0..4).random()),
+            current = (0..5).random().toFloat(),
+            power = (0..500).random().toFloat(),
+            temperature = (20..45).random(),
+            odometer = (100f + (0..200).random()),
+            totalRideTime = "164H 35M 0S"
+        )
+        _receivedData.value = testData
     }
 }

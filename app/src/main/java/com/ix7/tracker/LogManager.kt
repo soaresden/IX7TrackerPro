@@ -1,19 +1,37 @@
 package com.ix7.tracker
 
 import android.util.Log
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import java.text.SimpleDateFormat
+import java.util.*
 
-object LogManager {
-    private const val TAG = "IX7Tracker"
+class LogManager {
+    private val TAG = "IX7Tracker"
 
-    fun logInfo(message: String) {
-        Log.i(TAG, message)
-    }
+    private val _logs = MutableStateFlow<List<String>>(emptyList())
+    val logs: StateFlow<List<String>> = _logs
 
-    fun logError(message: String, throwable: Throwable? = null) {
-        Log.e(TAG, message, throwable)
-    }
+    fun addLog(message: String) {
+        val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+        val logEntry = "[$timestamp] $message"
 
-    fun logDebug(message: String) {
+        // Envoyer vers Logcat Android Studio
         Log.d(TAG, message)
+
+        // Garder aussi dans l'app
+        val currentLogs = _logs.value.toMutableList()
+        currentLogs.add(0, logEntry)
+
+        if (currentLogs.size > 50) {
+            currentLogs.removeAt(currentLogs.size - 1)
+        }
+
+        _logs.value = currentLogs
+    }
+
+    fun clearLogs() {
+        _logs.value = emptyList()
+        Log.d(TAG, "Logs effacés")
     }
 }
