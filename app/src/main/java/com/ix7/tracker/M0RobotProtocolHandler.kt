@@ -1,306 +1,289 @@
 package com.ix7.tracker
 
-import android.util.Log
+import kotlin.experimental.and
 
-/**
- * Gestionnaire du protocole M0Robot - parsing des données selon l'app officielle
- * Applique les corrections nécessaires pour obtenir les mêmes valeurs que l'app originale
- */
 class M0RobotProtocolHandler {
 
     companion object {
-        private const val TAG = "M0RobotProtocol"
+        // Commandes pour demander des informations
+        const val CMD_GET_BATTERY = 0x31.toByte()
+        const val CMD_GET_SPEED = 0x32.toByte()
+        const val CMD_GET_DISTANCE = 0x33.toByte()
+        const val CMD_GET_INFO = 0x34.toByte()
+        const val CMD_GET_STATUS = 0x35.toByte()
 
-        // Facteurs de correction calculés d'après l'analyse des écarts
-        // App officielle: 291.9 km vs votre app: 282.5 km = facteur 1.033
-        private const val ODOMETER_CORRECTION_FACTOR = 1.033f
-
-        // App officielle: 168H30M18S (606618s) vs votre app: 164H35M0S (592500s) = facteur 1.0238
-        private const val TIME_CORRECTION_FACTOR = 1.0238f
-
-        // Seuils de validation pour éviter des valeurs aberrantes
-        private const val MAX_SPEED_KMH = 60f
-        private const val MAX_BATTERY_PERCENT = 100f
-        private const val MIN_VOLTAGE = 20f
-        private const val MAX_VOLTAGE = 70f
-        private const val MIN_TEMPERATURE = -30
-        private const val MAX_TEMPERATURE = 80
+        // Headers de réponse typiques
+        const val HEADER_BATTERY = 0xA1.toByte()
+        const val HEADER_SPEED = 0xA2.toByte()
+        const val HEADER_DISTANCE = 0xA3.toByte()
+        const val HEADER_INFO = 0xA4.toByte()
+        const val HEADER_STATUS = 0xA5.toByte()
     }
 
     /**
-     * Parse les données brutes selon le protocole M0Robot
-     * Applique automatiquement les corrections nécessaires
+     * Parse les données reçues de la trottinette
      */
-    fun parseData(data: ByteArray): ScooterData {
-        if (data.isEmpty()) {
-            Log.w(TAG, "Données vides reçues")
-            return createDefaultData()
-        }
+    fun parseIncomingData(data: ByteArray): Map<String, Any> {
+        val result = mutableMapOf<String, Any>()
 
-        if (data.size < 8) {
-            Log.w(TAG, "Trame trop courte: ${data.size} bytes")
-            return createDefaultData()
-        }
+        if (data.isEmpty()) return result
 
-        return try {
-            // Log des données pour debug
-            val hexString = data.joinToString(" ") { "%02x".format(it) }
-            Log.d(TAG, "Parsing trame (${data.size} bytes): $hexString")
-
-            // Détection automatique du protocole
-            val scooterData = detectProtocolAndParse(data)
-
-            // Validation des données parsées
-            val validatedData = validateAndCorrectData(scooterData)
-
-            Log.d(TAG, "Résultat: odometer=${validatedData.odometer}km, temps=${validatedData.totalRideTime}")
-            validatedData
-
+        try {
+            when (data[0]) {
+                HEADER_BATTERY -> parseBatteryData(data, result)
+                HEADER_SPEED -> parseSpeedData(data, result)
+                HEADER_DISTANCE -> parseDistanceData(data, result)
+                HEADER_INFO -> parseInfoData(data, result)
+                HEADER_STATUS -> parseStatusData(data, result)
+                else -> parseGenericData(data, result)
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Erreur critique de parsing: ${e.message}", e)
-            createDefaultData()
+            LogManager.logError("Erreur lors du parsing des données", e)
+        }
+
+        return result
+    }
+
+    private fun parseBatteryData(data: ByteArray, result: MutableMap<String, Any>) {
+        if (data.size >= 6) {
+            // Format typique: [Header][Level][Voltage_High][Voltage_Low][Temp][Checksum]
+            val batteryLevel = (data[1] and 0xFF.toByte()).toInt()
+            val voltageHigh = (data[2] and 0xFF.toByte()).toInt()
+            val voltageLow = (data[3] and 0xFF.toByte()).toInt()
+            val temperature = (data[4] and 0xFF.toByte()).toInt()
+
+            val voltage = (voltageHigh * 256 + voltageLow) / 100.0
+
+            result["batteryLevel"] = batteryLevel
+            result["voltage"] = voltage
+            result["batteryTemp"] = temperature
+        }
+    }
+
+    private fun parseSpeedData(data: ByteArray, result: MutableMap<String, Any>) {
+        if (data.size >= 4) {
+            // Format: [Header][Speed_High][Speed_Low][Checksum]
+            val speedHigh = (data[1] and 0xFF.toByte()).toInt()
+            val speedLow = (data[2] and 0xFF.toByte()).toInt()
+            val speed = (speedHigh * 256 + speedLow) / 100.0
+
+            result["speed"] = speed
+        }
+    }
+
+    private fun parseDistanceData(data: ByteArray, result: MutableMap<String, Any>) {
+        if (data.size >= 6) {
+            // Format: [Header][Dist_B3][Dist_B2][Dist_B1][Dist_B0][Checksum]
+            val distance = ((data[1] and 0xFF.toByte()).toInt() shl 24) +
+                    ((data[2] and 0xFF.toByte()).toInt() shl 16) +
+                    ((data[3] and 0xFF.toByte()).toInt() shl 8) +
+                    (data[4] and 0xFF.toByte()).toInt()
+
+            result["totalDistance"] = distance / 1000.0 // Convertir en km
+        }
+    }
+
+    private fun parseInfoData(data: ByteArray, result: MutableMap<String, Any>) {
+        if (data.size >= 10) {
+            // Format: [Header][Model][FW_Major][FW_Minor][Serial...][Checksum]
+            val model = "IX7-${(data[1] and 0xFF.toByte()).toInt()}"
+            val firmwareMajor = (data[2] and 0xFF.toByte()).toInt()
+            val firmwareMinor = (data[3] and 0xFF.toByte()).toInt()
+            val firmware = "$firmwareMajor.$firmwareMinor"
+
+            result["model"] = model
+            result["firmware"] = firmware
+        }
+    }
+
+    private fun parseStatusData(data: ByteArray, result: MutableMap<String, Any>) {
+        if (data.size >= 4) {
+            // Format: [Header][Status_Flags][Error_Code][Checksum]
+            val statusFlags = (data[1] and 0xFF.toByte()).toInt()
+            val errorCode = (data[2] and 0xFF.toByte()).toInt()
+
+            // Analyse des flags de statut
+            result["brakeStatus"] = (statusFlags and 0x01) != 0
+            result["lightStatus"] = (statusFlags and 0x02) != 0
+            result["tiltSensor"] = (statusFlags and 0x04) != 0
+            result["motorTemp"] = (statusFlags and 0xF0) shr 4 // Température moteur encodée
+
+            if (errorCode != 0) {
+                result["errorCode"] = "E${errorCode.toString().padStart(2, '0')}"
+            }
+        }
+    }
+
+    private fun parseGenericData(data: ByteArray, result: MutableMap<String, Any>) {
+        // Tentative de parsing générique pour données non reconnues
+        if (data.size >= 2) {
+            val hex = data.joinToString("") { "%02X".format(it) }
+            LogManager.logInfo("Données non reconnues: $hex")
+
+            // Essayer de détecter des patterns communs
+            if (data.size >= 3) {
+                val value = ((data[1] and 0xFF.toByte()).toInt() shl 8) +
+                        (data[2] and 0xFF.toByte()).toInt()
+
+                // Heuristiques basées sur les valeurs
+                when {
+                    value in 0..100 -> result["possibleBatteryLevel"] = value
+                    value in 0..5000 -> result["possibleSpeed"] = value / 100.0
+                    value > 10000 -> result["possibleDistance"] = value / 1000.0
+                }
+            }
         }
     }
 
     /**
-     * Détection automatique du type de protocole selon les headers
+     * Crée une commande pour demander des informations spécifiques
      */
-    private fun detectProtocolAndParse(data: ByteArray): ScooterData {
-        return when {
-            // Protocole V2: header 0x55 0x5A
-            data.size >= 2 && data[0] == 0x55.toByte() && data[1] == 0x5A.toByte() -> {
-                Log.d(TAG, "Protocole V2 détecté (0x55 0x5A)")
-                parseV2Protocol(data)
-            }
-
-            // Protocole V1: header 0xAA
-            data.size >= 1 && data[0] == 0xAA.toByte() -> {
-                Log.d(TAG, "Protocole V1 détecté (0xAA)")
-                parseV1Protocol(data)
-            }
-
-            // Protocole inconnu - tentative de parsing générique
-            else -> {
-                Log.w(TAG, "Protocole inconnu (0x${data[0].toString(16)}), tentative de parsing générique")
-                parseGenericProtocol(data)
-            }
-        }
+    fun createInfoRequest(command: Byte): ByteArray {
+        // Format simple: [Header][Command][Checksum]
+        val packet = byteArrayOf(0x55.toByte(), command, 0x00)
+        packet[2] = calculateChecksum(packet.sliceArray(0..1))
+        return packet
     }
 
     /**
-     * Parsing protocole V2 (header 0x55 0x5A)
-     * Format le plus récent utilisé par les trottinettes M0Robot
+     * Crée une requête pour obtenir toutes les informations
      */
-    private fun parseV2Protocol(data: ByteArray): ScooterData {
-        if (data.size < 20) {
-            Log.w(TAG, "Trame V2 trop courte: ${data.size} bytes")
-            return createDefaultData()
-        }
-
-        return ScooterData(
-            // Vitesse en km/h (offset 4, uint16LE, divisé par 100)
-            speed = parseUint16LE(data, 4) / 100.0f,
-
-            // Niveau batterie en % (offset 14, uint8)
-            battery = parseUint8(data, 14).toFloat().coerceIn(0f, 100f),
-
-            // Tension batterie en V (offset 16, uint16LE, divisé par 100)
-            voltage = (parseUint16LE(data, 16) / 100.0f).coerceIn(MIN_VOLTAGE, MAX_VOLTAGE),
-
-            // Température en °C (offset 18, uint16LE, divisé par 10)
-            temperature = (parseUint16LE(data, 18) / 10.0f).toInt().coerceIn(MIN_TEMPERATURE, MAX_TEMPERATURE),
-
-            // CORRECTION: Kilométrage total avec facteur de correction
-            odometer = applyCorrectedOdometer(parseUint32LE(data, 6)),
-
-            // CORRECTION: Temps total avec facteur de correction
-            totalRideTime = applyCorrectedTime(parseUint32LE(data, 10)),
-
-            // Courant en A (offset 12, uint16LE, divisé par 100)
-            current = parseUint16LE(data, 12) / 100.0f,
-
-            // Puissance calculée
-            power = let {
-                val voltage = parseUint16LE(data, 16) / 100.0f
-                val current = parseUint16LE(data, 12) / 100.0f
-                voltage * current
-            },
-
-            // Valeurs fixes selon l'app officielle
-            firmwareVersion = "84.c.a (0439085e)",
-            bluetoothVersion = "0.d.5 (04cf)",
-            appVersion = "11.2.9",
-            errorCodes = 0,
-            warningCodes = 0,
-            batteryState = 0
+    fun createFullInfoRequest(): List<ByteArray> {
+        return listOf(
+            createInfoRequest(CMD_GET_BATTERY),
+            createInfoRequest(CMD_GET_SPEED),
+            createInfoRequest(CMD_GET_DISTANCE),
+            createInfoRequest(CMD_GET_INFO),
+            createInfoRequest(CMD_GET_STATUS)
         )
     }
 
     /**
-     * Parsing protocole V1 (header 0xAA)
-     * Format plus ancien, endianness différent
+     * Calcule le checksum pour un packet
      */
-    private fun parseV1Protocol(data: ByteArray): ScooterData {
-        if (data.size < 18) {
-            Log.w(TAG, "Trame V1 trop courte: ${data.size} bytes")
-            return createDefaultData()
+    private fun calculateChecksum(data: ByteArray): Byte {
+        var checksum = 0
+        for (byte in data) {
+            checksum += (byte and 0xFF.toByte()).toInt()
         }
-
-        return ScooterData(
-            speed = parseUint16BE(data, 2) / 100.0f,
-            battery = parseUint8(data, 12).toFloat().coerceIn(0f, 100f),
-            voltage = (parseUint16BE(data, 14) / 100.0f).coerceIn(MIN_VOLTAGE, MAX_VOLTAGE),
-            temperature = (parseUint16BE(data, 16) / 10.0f).toInt().coerceIn(MIN_TEMPERATURE, MAX_TEMPERATURE),
-
-            // Corrections appliquées aussi pour V1
-            odometer = applyCorrectedOdometer(parseUint32BE(data, 4)),
-            totalRideTime = applyCorrectedTime(parseUint32BE(data, 8)),
-
-            current = parseUint16BE(data, 10) / 100.0f,
-            power = let {
-                val voltage = parseUint16BE(data, 14) / 100.0f
-                val current = parseUint16BE(data, 10) / 100.0f
-                voltage * current
-            },
-
-            firmwareVersion = "84.c.a (0439085e)",
-            bluetoothVersion = "0.d.5 (04cf)",
-            appVersion = "11.2.9",
-            errorCodes = 0,
-            warningCodes = 0,
-            batteryState = 0
-        )
+        return (checksum and 0xFF).toByte()
     }
 
     /**
-     * Parsing générique pour protocoles non reconnus
-     * Teste différents offsets jusqu'à trouver des valeurs cohérentes
+     * Valide le checksum d'un packet reçu
      */
-    private fun parseGenericProtocol(data: ByteArray): ScooterData {
-        // Essayer plusieurs offsets pour trouver des valeurs sensées
-        for (baseOffset in 0..minOf(4, data.size - 16)) {
-            val candidate = tryParseAtOffset(data, baseOffset)
-            if (isDataRealistic(candidate)) {
-                Log.d(TAG, "Parsing générique réussi avec offset $baseOffset")
-                return candidate
+    fun validateChecksum(data: ByteArray): Boolean {
+        if (data.size < 2) return false
+
+        val receivedChecksum = data.last()
+        val calculatedChecksum = calculateChecksum(data.sliceArray(0 until data.size - 1))
+
+        return receivedChecksum == calculatedChecksum
+    }
+
+    /**
+     * Convertit les données brutes en format hexadécimal pour debug
+     */
+    fun dataToHex(data: ByteArray): String {
+        return data.joinToString(" ") { "%02X".format(it) }
+    }
+
+    /**
+     * Parse les données selon le protocole M365/IX7 standard
+     * Adapté pour les trottinettes IX7 qui utilisent souvent le même protocole
+     */
+    fun parseM365Protocol(data: ByteArray): Map<String, Any> {
+        val result = mutableMapOf<String, Any>()
+
+        if (data.size < 3) return result
+
+        // Le protocole M365 utilise généralement le format:
+        // [0x55][0xAA][Longueur][Commande][Données...][Checksum1][Checksum2]
+
+        if (data[0] == 0x55.toByte() && data[1] == 0xAA.toByte()) {
+            val length = (data[2] and 0xFF.toByte()).toInt()
+            val command = data[3]
+
+            if (data.size >= length + 6) { // Header(2) + Length(1) + Command(1) + Data + Checksum(2)
+                when (command) {
+                    0x21.toByte() -> parseM365BatteryInfo(data.sliceArray(4 until 4 + length), result)
+                    0x26.toByte() -> parseM365SpeedInfo(data.sliceArray(4 until 4 + length), result)
+                    0x25.toByte() -> parseM365Status(data.sliceArray(4 until 4 + length), result)
+                    else -> LogManager.logInfo("Commande M365 inconnue: 0x${"%02X".format(command)}")
+                }
             }
         }
 
-        Log.w(TAG, "Aucun pattern cohérent trouvé, utilisation des valeurs par défaut")
-        return createDefaultData()
+        return result
     }
 
-    private fun tryParseAtOffset(data: ByteArray, offset: Int): ScooterData {
-        return try {
-            if (offset + 20 > data.size) return createDefaultData()
+    private fun parseM365BatteryInfo(data: ByteArray, result: MutableMap<String, Any>) {
+        if (data.size >= 12) {
+            // Format M365 pour les infos batterie
+            val batteryLevel = (data[0] and 0xFF.toByte()).toInt()
+            val voltage = ((data[2] and 0xFF.toByte()).toInt() shl 8) + (data[1] and 0xFF.toByte()).toInt()
+            val current = ((data[4] and 0xFF.toByte()).toInt() shl 8) + (data[3] and 0xFF.toByte()).toInt()
+            val temperature = ((data[6] and 0xFF.toByte()).toInt() shl 8) + (data[5] and 0xFF.toByte()).toInt()
 
-            ScooterData(
-                speed = parseUint16LE(data, offset + 4) / 100.0f,
-                battery = parseUint8(data, offset + 14).toFloat(),
-                voltage = parseUint16LE(data, offset + 16) / 100.0f,
-                temperature = (parseUint16LE(data, offset + 18) / 10.0f).toInt(),
-                odometer = applyCorrectedOdometer(parseUint32LE(data, offset + 6)),
-                totalRideTime = applyCorrectedTime(parseUint32LE(data, offset + 10)),
-                current = parseUint16LE(data, offset + 12) / 100.0f,
-                power = 0f, // Calculé après validation
-                firmwareVersion = "84.c.a (0439085e)",
-                bluetoothVersion = "0.d.5 (04cf)",
-                appVersion = "11.2.9"
-            )
-        } catch (e: Exception) {
-            createDefaultData()
+            result["batteryLevel"] = batteryLevel
+            result["voltage"] = voltage / 100.0
+            result["current"] = if (current > 32767) (current - 65536) / 100.0 else current / 100.0
+            result["batteryTemp"] = (temperature - 20) / 10
+            result["power"] = (voltage / 100.0) * (if (current > 32767) (current - 65536) / 100.0 else current / 100.0)
+
+            // État de la batterie (dérivé)
+            result["batteryStatus"] = if (batteryLevel > 20) 1 else 0
         }
     }
 
-    /**
-     * Applique le facteur de correction sur le kilométrage pour matcher l'app officielle
-     */
-    private fun applyCorrectedOdometer(rawValue: Long): Float {
-        val baseKm = rawValue / 1000.0f
-        val correctedKm = baseKm * ODOMETER_CORRECTION_FACTOR
-        return correctedKm.coerceAtLeast(0f)
+    private fun parseM365SpeedInfo(data: ByteArray, result: MutableMap<String, Any>) {
+        if (data.size >= 16) {
+            val speed = ((data[1] and 0xFF.toByte()).toInt() shl 8) + (data[0] and 0xFF.toByte()).toInt()
+            val totalDistance = ((data[5] and 0xFF.toByte()).toInt() shl 24) +
+                    ((data[4] and 0xFF.toByte()).toInt() shl 16) +
+                    ((data[3] and 0xFF.toByte()).toInt() shl 8) +
+                    (data[2] and 0xFF.toByte()).toInt()
+
+            result["speed"] = speed / 1000.0
+            result["totalDistance"] = totalDistance / 1000.0
+
+            // Température du scooter si disponible
+            if (data.size >= 18) {
+                val temp = ((data[11] and 0xFF.toByte()).toInt() shl 8) + (data[10] and 0xFF.toByte()).toInt()
+                result["scooterTemp"] = (temp - 20) / 10.0
+            }
+
+            // Temps de conduite si disponible
+            if (data.size >= 20) {
+                val ridingTimeSeconds = ((data[9] and 0xFF.toByte()).toInt() shl 8) + (data[8] and 0xFF.toByte()).toInt()
+                val hours = ridingTimeSeconds / 3600
+                val minutes = (ridingTimeSeconds % 3600) / 60
+                val seconds = ridingTimeSeconds % 60
+                result["ridingTime"] = "${hours}H ${minutes}M ${seconds}S"
+            }
+        }
     }
 
-    /**
-     * Applique le facteur de correction sur le temps pour matcher l'app officielle
-     */
-    private fun applyCorrectedTime(rawValue: Long): String {
-        val correctedSeconds = (rawValue * TIME_CORRECTION_FACTOR).toLong()
-        return formatTime(correctedSeconds.coerceAtLeast(0))
-    }
+    private fun parseM365Status(data: ByteArray, result: MutableMap<String, Any>) {
+        if (data.size >= 8) {
+            val errorCode = (data[0] and 0xFF.toByte()).toInt()
+            val warningCode = (data[1] and 0xFF.toByte()).toInt()
 
-    private fun validateAndCorrectData(data: ScooterData): ScooterData {
-        return data.copy(
-            speed = data.speed.coerceIn(0f, MAX_SPEED_KMH),
-            battery = data.battery.coerceIn(0f, MAX_BATTERY_PERCENT),
-            voltage = data.voltage.coerceIn(MIN_VOLTAGE, MAX_VOLTAGE),
-            temperature = data.temperature.coerceIn(MIN_TEMPERATURE, MAX_TEMPERATURE),
-            power = (data.voltage * data.current).coerceAtLeast(0f)
-        )
-    }
+            result["errorCode"] = errorCode
+            result["warningCode"] = warningCode
+        }
 
-    private fun isDataRealistic(data: ScooterData): Boolean {
-        return data.speed in 0f..MAX_SPEED_KMH &&
-                data.battery in 0f..MAX_BATTERY_PERCENT &&
-                data.voltage in MIN_VOLTAGE..MAX_VOLTAGE &&
-                data.temperature in MIN_TEMPERATURE..MAX_TEMPERATURE &&
-                data.odometer >= 0f
-    }
+        // Versions si disponibles
+        if (data.size >= 16) {
+            try {
+                val electricVersion = "${data[8]}.${data[9]}.${data[10]} (${String.format("%02X%02X%02X%02X", data[12], data[13], data[14], data[15])})"
+                result["electricVersion"] = electricVersion
 
-    private fun createDefaultData(): ScooterData {
-        return ScooterData(
-            speed = 0f,
-            battery = 0f,
-            voltage = 0f,
-            temperature = 0,
-            odometer = 0f,
-            totalRideTime = "0H 0M 0S",
-            current = 0f,
-            power = 0f,
-            firmwareVersion = "84.c.a (0439085e)",
-            bluetoothVersion = "0.d.5 (04cf)",
-            appVersion = "11.2.9",
-            errorCodes = 0,
-            warningCodes = 0,
-            batteryState = 0
-        )
-    }
-
-    // Fonctions utilitaires de parsing
-    private fun parseUint8(data: ByteArray, offset: Int): Int {
-        return if (offset < data.size) data[offset].toInt() and 0xFF else 0
-    }
-
-    private fun parseUint16LE(data: ByteArray, offset: Int): Int {
-        if (offset + 1 >= data.size) return 0
-        return (data[offset].toInt() and 0xFF) or ((data[offset + 1].toInt() and 0xFF) shl 8)
-    }
-
-    private fun parseUint16BE(data: ByteArray, offset: Int): Int {
-        if (offset + 1 >= data.size) return 0
-        return ((data[offset].toInt() and 0xFF) shl 8) or (data[offset + 1].toInt() and 0xFF)
-    }
-
-    private fun parseUint32LE(data: ByteArray, offset: Int): Long {
-        if (offset + 3 >= data.size) return 0L
-        return (data[offset].toLong() and 0xFF) or
-                ((data[offset + 1].toLong() and 0xFF) shl 8) or
-                ((data[offset + 2].toLong() and 0xFF) shl 16) or
-                ((data[offset + 3].toLong() and 0xFF) shl 24)
-    }
-
-    private fun parseUint32BE(data: ByteArray, offset: Int): Long {
-        if (offset + 3 >= data.size) return 0L
-        return ((data[offset].toLong() and 0xFF) shl 24) or
-                ((data[offset + 1].toLong() and 0xFF) shl 16) or
-                ((data[offset + 2].toLong() and 0xFF) shl 8) or
-                (data[offset + 3].toLong() and 0xFF)
-    }
-
-    private fun formatTime(seconds: Long): String {
-        val hours = seconds / 3600
-        val minutes = (seconds % 3600) / 60
-        val secs = seconds % 60
-        return "${hours}H ${minutes}M ${secs}S"
+                val bluetoothVersion = "${data[4]}.${data[5]}.${data[6]} (${String.format("%02X%02X", data[7], data[8])})"
+                result["bluetoothVersion"] = bluetoothVersion
+            } catch (e: Exception) {
+                LogManager.logError("Erreur parsing versions", e)
+            }
+        }
     }
 }

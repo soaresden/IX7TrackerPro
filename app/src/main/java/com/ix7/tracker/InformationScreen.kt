@@ -1,13 +1,15 @@
 package com.ix7.tracker
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -15,177 +17,177 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun InformationScreen(
     scooterData: ScooterData,
-    isConnected: Boolean
+    onBack: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .background(Color.Black)
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState())
     ) {
-        // En-tête compact
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = if (isConnected)
-                    MaterialTheme.colorScheme.primaryContainer
-                else
-                    MaterialTheme.colorScheme.errorContainer
-            ),
-            shape = RoundedCornerShape(8.dp)
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Button(
+                onClick = onBack,
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
             ) {
-                Text(
-                    text = "M0Robot",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = if (isConnected) "Connecté" else "Déconnecté",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
+                Text("←", color = Color.White, fontSize = 18.sp)
+            }
+
+            Text(
+                text = "Informations",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.width(60.dp))
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Points de connexion
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            repeat(3) {
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .background(
+                            if (scooterData.isConnected) Color.Red else Color.Gray,
+                            shape = androidx.compose.foundation.shape.CircleShape
+                        )
                 )
             }
         }
 
-        // Données principales - 2 colonnes
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            CompactDataCard(
-                title = "Vitesse",
-                value = formatSpeed(scooterData.speed),
-                modifier = Modifier.weight(1f)
-            )
-            CompactDataCard(
-                title = "Batterie",
-                value = formatPercentage(scooterData.battery),
-                modifier = Modifier.weight(1f)
-            )
-        }
+        Spacer(modifier = Modifier.height(24.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            CompactDataCard(
-                title = "Température",
-                value = "${scooterData.temperature}°C",
-                modifier = Modifier.weight(1f)
-            )
-            CompactDataCard(
-                title = "Kilométrage",
-                value = formatDistance(scooterData.odometer),
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            CompactDataCard(
-                title = "Tension",
-                value = formatVoltage(scooterData.voltage),
-                modifier = Modifier.weight(1f)
-            )
-            CompactDataCard(
-                title = "Puissance",
-                value = formatPower(scooterData.power),
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        // Temps de conduite en pleine largeur
-        CompactDataCard(
-            title = "Temps total",
-            value = scooterData.totalRideTime,
-            modifier = Modifier.fillMaxWidth()
+        // Toutes les informations
+        InformationItem(
+            label = "Kilométrage total",
+            value = "${String.format("%.1f", scooterData.totalDistance)}Km",
+            isHighlighted = true
         )
 
-        // Informations système compactes
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = "Système",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("Erreurs: ${scooterData.errorCodes}", fontSize = 12.sp)
-                    Text("Avertissements: ${scooterData.warningCodes}", fontSize = 12.sp)
-                }
-            }
-        }
+        InformationItem(
+            label = "Température du scooter",
+            value = "${String.format("%.1f", scooterData.scooterTemperature)}°C : ${String.format("%.1f", scooterData.scooterTemperature)}°C"
+        )
+
+        InformationItem(
+            label = "Temps de conduite total",
+            value = scooterData.ridingTime
+        )
+
+        InformationItem(
+            label = "Vitesse actuelle",
+            value = "${String.format("%.1f", scooterData.currentSpeed)}Km/h"
+        )
+
+        InformationItem(
+            label = "Puissance restante",
+            value = "${scooterData.batteryLevel}%"
+        )
+
+        InformationItem(
+            label = "Température de la batterie",
+            value = if (scooterData.batteryTemperature == 0) "--" else "${scooterData.batteryTemperature}°C"
+        )
+
+        InformationItem(
+            label = "État de la batterie",
+            value = "${scooterData.batteryStatus}"
+        )
+
+        InformationItem(
+            label = "Courant",
+            value = "${String.format("%.1f", scooterData.current)}A : ${String.format("%.1f", scooterData.current)}A"
+        )
+
+        InformationItem(
+            label = "Tension",
+            value = "${String.format("%.1f", scooterData.voltage)}V"
+        )
+
+        InformationItem(
+            label = "Puissance",
+            value = "${String.format("%.1f", scooterData.power)}W"
+        )
+
+        // Espacement pour les codes d'erreur
+        Spacer(modifier = Modifier.height(16.dp))
+
+        InformationItem(
+            label = "Codes d'erreur",
+            value = "${scooterData.errorCode}"
+        )
+
+        InformationItem(
+            label = "Code d'avertissement",
+            value = "${scooterData.warningCode}"
+        )
+
+        // Espacement pour les versions
+        Spacer(modifier = Modifier.height(16.dp))
+
+        InformationItem(
+            label = "Version électrique",
+            value = scooterData.electricVersion
+        )
+
+        InformationItem(
+            label = "Version Bluetooth",
+            value = scooterData.bluetoothVersion
+        )
+
+        InformationItem(
+            label = "Numéro de version de l'application",
+            value = scooterData.appVersion
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
 @Composable
-fun CompactDataCard(
-    title: String,
+fun InformationItem(
+    label: String,
     value: String,
-    modifier: Modifier = Modifier
+    isHighlighted: Boolean = false
 ) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(8.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = title,
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = value,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-        }
+        Text(
+            text = label,
+            color = if (isHighlighted) Color.Red else Color.White,
+            fontSize = 16.sp,
+            modifier = Modifier.weight(1f)
+        )
+
+        Text(
+            text = value,
+            color = Color.White,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium
+        )
     }
-}
 
-// Fonctions de formatage (identiques à avant)
-fun formatPercentage(value: Float): String {
-    return "${String.format("%.1f", value)}%"
-}
-
-fun formatVoltage(value: Float): String {
-    return "${String.format("%.1f", value)}V"
-}
-
-fun formatCurrent(value: Float): String {
-    return "${String.format("%.1f", value)}A"
-}
-
-fun formatPower(value: Float): String {
-    return "${String.format("%.1f", value)}W"
-}
-
-fun formatDistance(value: Float): String {
-    return "${String.format("%.1f", value)} km"
-}
-
-fun formatSpeed(value: Float): String {
-    return "${String.format("%.1f", value)} km/h"
+    // Ligne de séparation
+    HorizontalDivider(
+        color = Color.Gray.copy(alpha = 0.3f),
+        thickness = 1.dp
+    )
 }
