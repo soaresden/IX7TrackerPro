@@ -31,7 +31,8 @@ class BluetoothManager(private val context: Context) {
         }
 
         bluetoothLe.setOnDataReceivedListener { data ->
-            parseScooterData(data)
+            LogManager.logInfo("Données M0Robot reçues: ${data.joinToString(" ") { "%02X".format(it) }}")
+            parseM0RobotData(data)
         }
     }
 
@@ -77,53 +78,112 @@ class BluetoothManager(private val context: Context) {
         disconnect()
     }
 
-    private fun parseScooterData(data: ByteArray) {
-        try {
-            // Parsing basique - à améliorer selon le vrai protocole M0Robot
-            if (data.size >= 10) {
-                val speed = if (data.size > 2) ((data[1].toInt() and 0xFF) * 0.1f) else 0f
-                val battery = if (data.size > 3) (data[2].toInt() and 0xFF).toFloat() else 0f
-                val voltage = if (data.size > 5) ((data[4].toInt() and 0xFF) + (data[5].toInt() and 0xFF) * 0.1f) else 0f
-                val current = if (data.size > 7) ((data[6].toInt() and 0xFF) + (data[7].toInt() and 0xFF) * 0.01f) else 0f
-                val temp = if (data.size > 8) (data[8].toInt() and 0xFF) - 20 else 25
-
-                val scooterData = ScooterData(
-                    speed = speed,
-                    battery = battery,
-                    voltage = voltage,
-                    current = current,
-                    power = voltage * current,
-                    temperature = temp,
-                    odometer = 282.5f, // Valeur fixe pour test
-                    totalRideTime = "164H 35M 0S",
-                    firmwareVersion = "84.c.a (0439085e)",
-                    bluetoothVersion = "0.d.5 (04cf)",
-                    appVersion = "11.2.9"
-                )
-
-                _receivedData.value = scooterData
-                LogManager.logInfo("Données mises à jour: Vitesse=${speed}km/h, Batterie=${battery}%")
-            }
-        } catch (e: Exception) {
-            LogManager.logError("Erreur parsing données", e)
-            generateTestData()
+    private fun parseM0RobotData(data: ByteArray) {
+        if (data.size < 3) {
+            LogManager.logInfo("Données M0Robot trop courtes: ${data.size} bytes")
+            return
         }
-    }
 
-    private fun generateTestData() {
-        val testData = ScooterData(
-            speed = (0..25).random().toFloat(),
-            battery = (60..90).random().toFloat(),
-            voltage = 49.2f,
-            current = 0.1f,
-            power = 7.9f,
-            temperature = 27,
-            odometer = 282.5f,
-            totalRideTime = "164H 35M 0S",
-            firmwareVersion = "84.c.a (0439085e)",
-            bluetoothVersion = "0.d.5 (04cf)",
-            appVersion = "11.2.9"
-        )
-        _receivedData.value = testData
+        // Vérifier que c'est une réponse M0Robot (commence par 0x55)
+        if (data[0] != 0x55.toByte()) {
+            LogManager.logInfo("Pas une réponse M0Robot valide: premier byte = ${data[0]}")
+            return
+        }
+
+        val commandType = data[1].toInt() and 0xFF
+        LogManager.logInfo("Réponse M0Robot de type: 0x${commandType.toString(16).uppercase()}")
+
+        val currentData = _receivedData.value ?: ScooterData()
+        var updatedData = currentData
+
+        when (commandType) {
+            0x31 -> {
+                // Réponse vitesse/batterie
+                if (data.size >= 10) {
+                    val speed = ((data[2].toInt() and 0xFF) shl 8 or (data[3].toInt() and 0xFF)) / 100f
+                    val battery = (data[4].toInt() and 0xFF).toFloat()
+
+                    updatedData = currentData.copy(
+                        speed = speed,
+                        battery = battery
+                    )
+                    LogManager.logInfo("M0Robot - Vitesse: ${speed}km/h, Batterie: ${battery}%")
+                }
+            }
+
+            0x32 -> {
+                // Réponse voltage/courant
+                if (data.size >= 10) {
+                    val voltage = ((data[2].toInt() and 0xFF) shl 8 or (data[3].toInt() and 0xFF)) / 100f
+                    val current = ((data[4].toInt() and 0xFF) shl 8 or (data[5].toInt() and 0xFF)) / 100f
+
+                    updatedData = currentData.copy(
+                        voltage = voltage,
+                        current = current,
+                        power = voltage * current
+                    )
+                    LogManager.logInfo("M0Robot - Tension: ${voltage}V, Courant: ${current}A")
+                }
+            }
+
+            0x33 -> {
+                // Réponse température/odomètre
+                if (data.size >= 10) {
+                    val temperature = (data[2].toInt() and 0xFF) - 40 // Offset de température
+                    val odometer = ((data[4].toInt() and 0xFF) shl 24 or
+                            (data[5].toInt() and 0xFF) shl 16 or
+                            (data[6].toInt() and 0xFF) shl 8 or
+                            (data[7].toInt() and 0xFF)) / 1000f
+
+                    updatedData = currentData.copy(
+                        temperature = temperature,
+                        odometer = odometer
+                    )
+                    LogManager.logInfo("M0Robot - Température: ${temperature}°C, Odomètre: ${odometer}km")
+                }
+            }
+
+            0x34 -> {
+                // Réponse infos système
+                if (data.size >= 8) {
+                    val errorCodes = data[2].toInt() and 0xFF
+                    val warningCodes = data[3].toInt() and 0xFF
+                    val batteryState = data[4].toInt() and 0xFF
+
+                    updatedData = currentData.copy(
+                        errorCodes = errorCodes,
+                        warningCodes = warningCodes,
+                        batteryState = batteryState
+                    )
+                    LogManager.logInfo("M0Robot - Erreurs: $errorCodes, Avertissements: $warningCodes")
+                }
+            }
+
+            0x35 -> {
+                // Réponse version firmware
+                if (data.size >= 8) {
+                    val majorVersion = data[2].toInt() and 0xFF
+                    val minorVersion = data[3].toInt() and 0xFF
+                    val patchVersion = data[4].toInt() and 0xFF
+
+                    val firmwareVersion = "$majorVersion.$minorVersion.$patchVersion"
+
+                    updatedData = currentData.copy(
+                        firmwareVersion = firmwareVersion
+                    )
+                    LogManager.logInfo("M0Robot - Firmware: $firmwareVersion")
+                }
+            }
+
+            else -> {
+                LogManager.logInfo("Type de réponse M0Robot non reconnu: 0x${commandType.toString(16).uppercase()}")
+            }
+        }
+
+        // Mettre à jour les données seulement si on a reçu de vraies données
+        if (updatedData != currentData) {
+            _receivedData.value = updatedData
+            LogManager.logInfo("Données M0Robot mises à jour")
+        }
     }
 }

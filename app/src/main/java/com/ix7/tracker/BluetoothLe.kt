@@ -104,6 +104,8 @@ class BluetoothLe(private val context: Context) {
         var serviceFound: BluetoothGattService? = null
         var appType = 1
 
+        LogManager.logInfo("=== DÉBUT DIAGNOSTIC DÉTAILLÉ ===")
+
         // Chercher le bon service parmi les possibles
         for ((index, serviceUuid) in POSSIBLE_SERVICE_UUIDS.withIndex()) {
             val service = gatt?.getService(serviceUuid)
@@ -120,54 +122,90 @@ class BluetoothLe(private val context: Context) {
             return
         }
 
-        // Chercher les caractéristiques compatibles
-        var writeChar: BluetoothGattCharacteristic? = null
-        var notifyChar: BluetoothGattCharacteristic? = null
-
-        // Essayer de trouver une caractéristique qui peut écrire ET notifier
+        // DIAGNOSTIC COMPLET de toutes les caractéristiques
+        LogManager.logInfo("=== ANALYSE COMPLÈTE DES CARACTÉRISTIQUES ===")
         for (char in serviceFound.characteristics) {
             val properties = char.properties
-            LogManager.logInfo("Caractéristique ${char.uuid}: propriétés = $properties")
+            LogManager.logInfo("Caractéristique: ${char.uuid}")
+            LogManager.logInfo("  Propriétés: $properties")
+            LogManager.logInfo("  READ: ${(properties and BluetoothGattCharacteristic.PROPERTY_READ) != 0}")
+            LogManager.logInfo("  WRITE: ${(properties and BluetoothGattCharacteristic.PROPERTY_WRITE) != 0}")
+            LogManager.logInfo("  WRITE_NO_RESPONSE: ${(properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) != 0}")
+            LogManager.logInfo("  NOTIFY: ${(properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0}")
+            LogManager.logInfo("  INDICATE: ${(properties and BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0}")
 
-            if ((properties and BluetoothGattCharacteristic.PROPERTY_WRITE) != 0 ||
-                (properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) != 0) {
-                writeChar = char
-                LogManager.logInfo("Caractéristique d'écriture trouvée: ${char.uuid}")
-            }
-
-            if ((properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0) {
-                notifyChar = char
-                LogManager.logInfo("Caractéristique de notification trouvée: ${char.uuid}")
+            // Analyser les descripteurs
+            LogManager.logInfo("  Descripteurs trouvés: ${char.descriptors.size}")
+            for (desc in char.descriptors) {
+                LogManager.logInfo("    Descripteur: ${desc.uuid}")
             }
         }
 
-        if (writeChar == null) {
+        // D'après le code original, M0Robot utilise LA MÊME caractéristique pour write ET notify
+        var targetCharacteristic: BluetoothGattCharacteristic? = null
+
+        // SOLUTION : Utiliser 2 caractéristiques distinctes
+        var writeCharacteristic: BluetoothGattCharacteristic? = null
+        var notifyCharacteristic: BluetoothGattCharacteristic? = null
+
+        // Pour le service 6e400001, essayer TOUTES les caractéristiques
+        if (appType == 1) {
+            // 6e400002 pour écrire (WRITE)
+            writeCharacteristic = serviceFound.getCharacteristic(UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e"))
+            // 6e400003 pour les notifications (NOTIFY)
+            notifyCharacteristic = serviceFound.getCharacteristic(UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e"))
+
+            LogManager.logInfo("6e400002 pour écriture: ${writeCharacteristic != null}")
+            LogManager.logInfo("6e400003 pour notifications: ${notifyCharacteristic != null}")
+        }
+
+        if (writeCharacteristic == null) {
             LogManager.logError("Aucune caractéristique d'écriture trouvée")
             return
         }
 
-        characteristic = writeChar
+        if (notifyCharacteristic == null) {
+            LogManager.logError("Aucune caractéristique de notification trouvée")
+            return
+        }
 
-        // Configurer les notifications si disponibles
-        if (notifyChar != null && ActivityCompat.checkSelfPermission(context, android.Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
-            gatt?.setCharacteristicNotification(notifyChar, true)
+        characteristic = targetCharacteristic
+        LogManager.logInfo("=== CARACTÉRISTIQUE D'ÉCRITURE: ${writeCharacteristic.uuid} ===")
+        LogManager.logInfo("=== CARACTÉRISTIQUE DE NOTIFICATION: ${notifyCharacteristic.uuid} ===")
 
-            val descriptor = notifyChar.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"))
+        // Configurer les notifications sur la BONNE caractéristique
+        if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+            LogManager.logInfo("Configuration des notifications sur ${notifyCharacteristic.uuid}")
+
+            val setNotifResult = gatt?.setCharacteristicNotification(notifyCharacteristic, true)
+            LogManager.logInfo("setCharacteristicNotification résultat: $setNotifResult")
+
+            // Utiliser le bon descripteur CCCD
+            val cccdUuid = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+            val descriptor = notifyCharacteristic.getDescriptor(cccdUuid)
+
             if (descriptor != null) {
+                LogManager.logInfo("*** DESCRIPTEUR CCCD TROUVÉ SUR 6e400003 ! ***")
                 descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                gatt?.writeDescriptor(descriptor)
-                LogManager.logInfo("Notifications activées")
+                val writeResult = gatt?.writeDescriptor(descriptor)
+                LogManager.logInfo("writeDescriptor résultat: $writeResult")
+            } else {
+                LogManager.logError("Descripteur CCCD non trouvé sur 6e400003")
             }
         }
 
-        LogManager.logInfo("Caractéristiques M0Robot configurées (type $appType)")
+        LogManager.logInfo("=== FIN DIAGNOSTIC ===")
         onConnectionStateChangedListener?.invoke(true)
 
-        // Démarrer l'envoi des commandes M0Robot
-        startM0RobotCommands()
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            LogManager.logInfo("***** DÉBUT ENVOI COMMANDES M0ROBOT *****")
+            startM0RobotCommands()
+        }, 2000)
     }
 
     private fun startM0RobotCommands() {
+        LogManager.logInfo("startM0RobotCommands() appelée")
+
         // Envoyer les commandes M0Robot pour récupérer les infos
         val commands = listOf(
             byteArrayOf(0x55.toByte(), 0x31.toByte(), 0x86.toByte()), // Vitesse/Batterie
@@ -177,14 +215,22 @@ class BluetoothLe(private val context: Context) {
             byteArrayOf(0x55.toByte(), 0x35.toByte(), 0x8A.toByte())  // Version firmware
         )
 
-        commands.forEachIndexed { index, command ->
-            android.os.Handler().postDelayed({
+        LogManager.logInfo("Nombre de commandes à envoyer: ${commands.size}")
+
+        // Envoyer immédiatement la première commande
+        if (commands.isNotEmpty()) {
+            sendData(commands[0])
+            LogManager.logInfo("Première commande M0Robot envoyée immédiatement: ${commands[0].joinToString(" ") { "%02X".format(it) }}")
+        }
+
+        // Envoyer les autres avec délai
+        commands.drop(1).forEachIndexed { index, command ->
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                LogManager.logInfo("Envoi commande M0Robot ${index + 2}: ${command.joinToString(" ") { "%02X".format(it) }}")
                 sendData(command)
-                LogManager.logInfo("Commande M0Robot ${index + 1} envoyée: ${command.joinToString(" ") { "%02X".format(it) }}")
-            }, (index * 500).toLong()) // 500ms entre chaque commande
+            }, ((index + 1) * 1000).toLong()) // 1 seconde entre chaque
         }
     }
-
     fun connect(deviceAddress: String) {
         if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
             LogManager.logError("Permission BLUETOOTH_CONNECT non accordée")

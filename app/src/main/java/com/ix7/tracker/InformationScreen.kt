@@ -40,36 +40,39 @@ fun InformationScreen(
         CompactInfoCard(
             title = "Données temps réel",
             items = listOf(
-                "Kilométrage total" to formatDistance(scooterData.odometer),
-                "Température" to "${scooterData.temperature}°C : ${scooterData.temperature}°C",
-                "Temps de conduite" to scooterData.totalRideTime,
-                "Vitesse actuelle" to formatSpeed(scooterData.speed),
-                "Puissance restante" to formatPercentage(scooterData.battery)
-            )
+                InfoItem("Kilométrage total", formatDistance(scooterData.odometer)),
+                InfoItem("Température", "${scooterData.temperature}°C : ${scooterData.temperature}°C"),
+                InfoItem("Temps de conduite", scooterData.totalRideTime),
+                InfoItem("Vitesse actuelle", formatSpeed(scooterData.speed), true), // COULEUR
+                InfoItem("Puissance restante", formatPercentage(scooterData.battery), true) // COULEUR
+            ),
+            isConnected = isConnected
         )
 
         // Batterie compacte
         CompactInfoCard(
             title = "Batterie",
             items = listOf(
-                "Température batterie" to "--",
-                "État batterie" to "${scooterData.batteryState}",
-                "Courant" to "${formatCurrent(scooterData.current)} : ${formatCurrent(scooterData.current)}",
-                "Tension" to formatVoltage(scooterData.voltage),
-                "Puissance" to formatPower(scooterData.power)
-            )
+                InfoItem("Température batterie", "--"),
+                InfoItem("État batterie", "${scooterData.batteryState}"),
+                InfoItem("Courant", "${formatCurrent(scooterData.current)} : ${formatCurrent(scooterData.current)}", true), // COULEUR
+                InfoItem("Tension", formatVoltage(scooterData.voltage), true), // COULEUR
+                InfoItem("Puissance", formatPower(scooterData.power), true) // COULEUR
+            ),
+            isConnected = isConnected
         )
 
         // Système compacte
         CompactInfoCard(
             title = "Système",
             items = listOf(
-                "Codes d'erreur" to "${scooterData.errorCodes}",
-                "Code d'avertissement" to "${scooterData.warningCodes}",
-                "Version électrique" to scooterData.firmwareVersion,
-                "Version Bluetooth" to scooterData.bluetoothVersion,
-                "Version application" to scooterData.appVersion
-            )
+                InfoItem("Codes d'erreur", "${scooterData.errorCodes}"),
+                InfoItem("Code d'avertissement", "${scooterData.warningCodes}"),
+                InfoItem("Version électrique", scooterData.firmwareVersion),
+                InfoItem("Version Bluetooth", scooterData.bluetoothVersion),
+                InfoItem("Version application", scooterData.appVersion)
+            ),
+            isConnected = isConnected
         )
 
         if (!isConnected) {
@@ -88,10 +91,18 @@ fun InformationScreen(
     }
 }
 
+// Classe helper pour éviter la complexité avec les types
+data class InfoItem(
+    val label: String,
+    val value: String,
+    val isDynamic: Boolean = false
+)
+
 @Composable
 fun CompactInfoCard(
     title: String,
-    items: List<Pair<String, String>>
+    items: List<InfoItem>,
+    isConnected: Boolean = true
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -109,24 +120,28 @@ fun CompactInfoCard(
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
-            items.forEachIndexed { index, (label, value) ->
+            items.forEachIndexed { index, item ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = label,
+                        text = item.label,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f)
                     )
 
                     Text(
-                        text = value,
+                        text = item.value,
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = when {
+                            !isConnected -> Color.Gray
+                            item.isDynamic -> MaterialTheme.colorScheme.primary // BLEU pour données dynamiques
+                            else -> MaterialTheme.colorScheme.onSurface
+                        }
                     )
                 }
 
