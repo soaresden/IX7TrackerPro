@@ -11,7 +11,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
-import com.ix7.tracker.bluetooth.BluetoothManager
+import com.ix7.tracker.bluetooth.BluetoothManagerImpl
+import com.ix7.tracker.bluetooth.BluetoothRepository
 import com.ix7.tracker.bluetooth.PermissionHelper
 import com.ix7.tracker.ui.screens.MainScreen
 import com.ix7.tracker.ui.theme.IX7TrackerTheme
@@ -19,7 +20,7 @@ import com.ix7.tracker.utils.LogManager
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var bluetoothManager: BluetoothManager
+    private lateinit var bluetoothManager: BluetoothRepository
     private lateinit var logManager: LogManager
 
     // Gestionnaire de permissions
@@ -39,7 +40,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // Initialiser les gestionnaires
-        bluetoothManager = BluetoothManager(this)
+        bluetoothManager = BluetoothManagerImpl(this)
         logManager = LogManager.getInstance()
 
         logManager.info("Application démarrée", "MAIN")

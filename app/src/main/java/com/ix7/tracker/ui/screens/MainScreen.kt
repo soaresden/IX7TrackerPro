@@ -17,53 +17,45 @@ fun MainScreen(
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
 
-    // Observer les états
     val connectionState by bluetoothManager.connectionState.collectAsState()
     val discoveredDevices by bluetoothManager.discoveredDevices.collectAsState()
     val scooterData by bluetoothManager.scooterData.collectAsState()
     val isScanning by bluetoothManager.isScanning.collectAsState()
 
     Column {
-        // Barre de navigation en haut
         NavigationBar {
             NavigationBarItem(
-                icon = { Text("•") },
+                icon = { Text("🔗") },
                 label = { Text("Connexion") },
                 selected = selectedTab == 0,
                 onClick = { selectedTab = 0 }
             )
             NavigationBarItem(
-                icon = { Text("•") },
+                icon = { Text("📊") },
                 label = { Text("Données") },
                 selected = selectedTab == 1,
                 onClick = { selectedTab = 1 }
             )
             NavigationBarItem(
-                icon = { Text("•") },
-                label = { Text("Logs") },
+                icon = { Text("🛴") },
+                label = { Text("Conduite") },
                 selected = selectedTab == 2,
                 onClick = { selectedTab = 2 }
             )
+            NavigationBarItem(
+                icon = { Text("📝") },
+                label = { Text("Logs") },
+                selected = selectedTab == 3,
+                onClick = { selectedTab = 3 }
+            )
         }
 
-        // Contenu selon l'onglet sélectionné
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-        ) {
+        Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
             when (selectedTab) {
-                0 -> ConnectionScreen(
-                    bluetoothManager = bluetoothManager,
-                    discoveredDevices = discoveredDevices,
-                    connectionState = connectionState,
-                    isScanning = isScanning
-                )
-                1 -> DataScreen(
-                    scooterData = scooterData,
-                    isConnected = connectionState == ConnectionState.CONNECTED
-                )
-                2 -> LogScreen(logManager = logManager)
+                0 -> ConnectionScreen(bluetoothManager, discoveredDevices, connectionState, isScanning)
+                1 -> CompactDataScreen(scooterData, connectionState == ConnectionState.CONNECTED)
+                2 -> RideScreen(scooterData, connectionState == ConnectionState.CONNECTED)
+                3 -> LogScreen(logManager)
             }
         }
     }
