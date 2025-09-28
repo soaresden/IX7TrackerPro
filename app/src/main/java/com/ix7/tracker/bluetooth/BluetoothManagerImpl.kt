@@ -15,9 +15,15 @@ class BluetoothManagerImpl(private val context: Context) : BluetoothRepository {
         _connectionState.value = state
     }
 
-    private val dataHandler = BluetoothDataHandler { scooterData ->
-        _scooterData.value = scooterData
-    }
+    private val dataHandler = BluetoothDataHandler(
+        onDataUpdate = { scooterData ->
+            _scooterData.value = scooterData
+        },
+        sendCommand = { command ->
+            // Déléguer l'envoi de commande au connector
+            connector.sendCommand(command)
+        }
+    )
 
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     private val _discoveredDevices = MutableStateFlow<List<BluetoothDeviceInfo>>(emptyList())
