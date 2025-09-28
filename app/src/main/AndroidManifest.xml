@@ -33,7 +33,7 @@
         android:theme="@android:style/Theme.Material.Light">
 
         <activity
-            android:name=".MainActivity"
+            android:name=".ui.MainActivity"
             android:exported="true"
             android:theme="@android:style/Theme.Material.Light">
             <intent-filter>

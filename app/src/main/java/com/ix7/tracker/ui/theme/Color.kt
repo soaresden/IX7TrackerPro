@@ -9,3 +9,12 @@ val Pink80 = Color(0xFFEFB8C8)
 val Purple40 = Color(0xFF6650a4)
 val PurpleGrey40 = Color(0xFF625b71)
 val Pink40 = Color(0xFF7D5260)
+
+// Couleurs personnalisées IX7Tracker
+val BluetoothBlue = Color(0xFF2196F3)
+val ConnectedGreen = Color(0xFF4CAF50)
+val ErrorRed = Color(0xFFF44336)
+val WarningOrange = Color(0xFFFF9800)
+val BatteryGreen = Color(0xFF8BC34A)
+val BatteryYellow = Color(0xFFFFC107)
+val BatteryRed = Color(0xFFFF5722)
