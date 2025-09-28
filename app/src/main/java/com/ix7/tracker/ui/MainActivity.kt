@@ -11,7 +11,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
-import com.ix7.tracker.bluetooth.BluetoothManagerImpl
 import com.ix7.tracker.bluetooth.BluetoothRepository
 import com.ix7.tracker.bluetooth.PermissionHelper
 import com.ix7.tracker.ui.screens.MainScreen

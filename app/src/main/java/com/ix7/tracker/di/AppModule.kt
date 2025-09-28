@@ -2,7 +2,6 @@ package com.ix7.tracker.di
 
 import android.content.Context
 import com.ix7.tracker.bluetooth.BluetoothRepository
-import com.ix7.tracker.bluetooth.BluetoothManagerImpl
 import com.ix7.tracker.utils.LogManager
 import com.ix7.tracker.utils.PreferencesManager
 
