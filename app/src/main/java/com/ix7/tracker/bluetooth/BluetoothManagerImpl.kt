@@ -15,8 +15,8 @@ class BluetoothManagerImpl(private val context: Context) : BluetoothRepository {
         _connectionState.value = state
     }
 
-    private val dataHandler = BluetoothDataHandler { data ->
-        _scooterData.value = data
+    private val dataHandler = BluetoothDataHandler { scooterData ->
+        _scooterData.value = scooterData
     }
 
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
@@ -40,8 +40,8 @@ class BluetoothManagerImpl(private val context: Context) : BluetoothRepository {
     }
 
     override suspend fun connectToDevice(address: String): Result<Unit> {
-        return connector.connect(address) { data ->
-            dataHandler.handleData(data)
+        return connector.connect(address) { byteArrayData ->
+            dataHandler.handleData(byteArrayData)
         }
     }
 
@@ -64,5 +64,7 @@ class BluetoothManagerImpl(private val context: Context) : BluetoothRepository {
 
     override fun isBluetoothEnabled(): Boolean = scanner.isBluetoothEnabled()
     override fun hasNecessaryPermissions(): Boolean = PermissionHelper.hasAllBluetoothPermissions(context)
-    override fun clearDiscoveredDevices() { _discoveredDevices.value = emptyList() }
+    override fun clearDiscoveredDevices() {
+        _discoveredDevices.value = emptyList()
+    }
 }
