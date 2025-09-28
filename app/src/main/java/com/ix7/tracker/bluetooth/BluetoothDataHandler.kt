@@ -17,25 +17,63 @@ class BluetoothDataHandler(
         try {
             Log.d(TAG, "Données reçues: ${bytesToHex(data)} (${data.size} bytes)")
 
+            if (data.isEmpty()) {
+                Log.d(TAG, "Données vides reçues")
+                return
+            }
+
             val parsedData = parseData(data)
 
-            // Mettre à jour seulement si de nouvelles données sont reçues
-            if (parsedData.speed > 0 || parsedData.battery > 0 || parsedData.voltage > 0) {
-                currentData = currentData.copy(
-                    speed = if (parsedData.speed > 0) parsedData.speed else currentData.speed,
-                    battery = if (parsedData.battery > 0) parsedData.battery else currentData.battery,
-                    voltage = if (parsedData.voltage > 0) parsedData.voltage else currentData.voltage,
-                    current = if (parsedData.current != 0f) parsedData.current else currentData.current,
-                    power = if (parsedData.power > 0) parsedData.power else currentData.power,
-                    temperature = if (parsedData.temperature != 0f) parsedData.temperature else currentData.temperature,
-                    odometer = if (parsedData.odometer > 0) parsedData.odometer else currentData.odometer,
+            // Mettre à jour SEULEMENT si de vraies données sont parsées
+            var hasUpdates = false
+            var updatedData = currentData
+
+            if (parsedData.speed > 0 && parsedData.speed != currentData.speed) {
+                updatedData = updatedData.copy(speed = parsedData.speed)
+                hasUpdates = true
+            }
+
+            if (parsedData.battery > 0 && parsedData.battery != currentData.battery) {
+                updatedData = updatedData.copy(battery = parsedData.battery)
+                hasUpdates = true
+            }
+
+            if (parsedData.voltage > 0 && parsedData.voltage != currentData.voltage) {
+                updatedData = updatedData.copy(voltage = parsedData.voltage)
+                hasUpdates = true
+            }
+
+            if (parsedData.current != 0f && parsedData.current != currentData.current) {
+                updatedData = updatedData.copy(current = parsedData.current)
+                hasUpdates = true
+            }
+
+            if (parsedData.power > 0 && parsedData.power != currentData.power) {
+                updatedData = updatedData.copy(power = parsedData.power)
+                hasUpdates = true
+            }
+
+            if (parsedData.temperature > 0 && parsedData.temperature != currentData.temperature) {
+                updatedData = updatedData.copy(temperature = parsedData.temperature)
+                hasUpdates = true
+            }
+
+            if (parsedData.odometer > 0 && parsedData.odometer != currentData.odometer) {
+                updatedData = updatedData.copy(odometer = parsedData.odometer)
+                hasUpdates = true
+            }
+
+            if (hasUpdates) {
+                currentData = updatedData.copy(
                     lastUpdate = Date(),
                     isConnected = true
                 )
-
                 Log.d(TAG, "Données mises à jour: Speed=${currentData.speed}, Battery=${currentData.battery}, Voltage=${currentData.voltage}")
                 onDataUpdate(currentData)
+            } else {
+                Log.d(TAG, "Aucune donnée valide trouvée dans la trame")
             }
+
         } catch (e: Exception) {
             Log.e(TAG, "Erreur parsing data", e)
         }
@@ -50,52 +88,60 @@ class BluetoothDataHandler(
         var temperature = 0f
         var odometer = 0f
 
-        // Parsing plus agressif pour détecter les données
-        for (i in 0 until minOf(data.size - 1, 15)) {
-            val value16 = getShort(data, i)
-            val value8 = data[i].toUByte().toInt()
-
-            // Détection de vitesse (0-80 km/h)
-            if (value16 in 0..8000 && i in 0..8) {
-                val possibleSpeed = value16 / 100f
-                if (possibleSpeed <= 80f) {
-                    speed = maxOf(speed, possibleSpeed)
+        // Analyse des patterns connus dans les logs
+        when (data.size) {
+            2 -> {
+                // Pattern "00 01" ou similaire - possiblement vitesse ou état
+                val value = getShort(data, 0)
+                if (value in 1..100) {
+                    speed = value / 100f // Conversion possible vitesse
                 }
             }
 
-            // Détection de batterie (0-100%)
-            if (value8 in 0..100 && i in 0..data.size-1) {
-                battery = maxOf(battery, value8.toFloat())
+            4 -> {
+                // Pattern "01 00 FF FF" - données complexes
+                val value1 = data[0].toUByte().toInt()
+                val value2 = data[1].toUByte().toInt()
+
+                if (value1 in 1..100) battery = value1.toFloat()
+                if (value2 in 1..100) speed = value2.toFloat()
             }
 
-            // Détection de voltage (20-70V)
-            if (value16 in 2000..7000 && i in 0..data.size-2) {
-                val possibleVoltage = value16 / 100f
-                if (possibleVoltage >= 20f && possibleVoltage <= 70f) {
-                    voltage = maxOf(voltage, possibleVoltage)
+            8 -> {
+                // Pattern "08 00 0A 00 00 00 90 01" - frame principale
+                val speedRaw = getShort(data, 0)
+                val batteryRaw = data[2].toUByte().toInt()
+                val voltageRaw = getShort(data, 6)
+
+                if (speedRaw in 1..8000) speed = speedRaw / 100f
+                if (batteryRaw in 1..100) battery = batteryRaw.toFloat()
+                if (voltageRaw in 2000..7000) voltage = voltageRaw / 100f
+            }
+
+            16 -> {
+                // Pattern "5A 00 00 34..." - frame étendue
+                val header = data[0].toUByte().toInt()
+                if (header == 0x5A) {
+                    // Frame M0Robot détectée
+                    val speedRaw = getShort(data, 1)
+                    val batteryRaw = data[3].toUByte().toInt()
+                    val voltageRaw = getShort(data, 4)
+                    val tempRaw = data[6].toUByte().toInt()
+
+                    if (speedRaw in 1..8000) speed = speedRaw / 100f
+                    if (batteryRaw in 1..100) battery = batteryRaw.toFloat()
+                    if (voltageRaw in 2000..7000) voltage = voltageRaw / 100f
+                    if (tempRaw in 10..80) temperature = tempRaw.toFloat()
                 }
             }
-
-            // Calcul de puissance et courant si on a voltage et autres données
-            if (voltage > 0 && speed > 0) {
-                current = (speed * 2) // Estimation simple
-                power = voltage * current
-            }
         }
 
-        // Données simulées pour test si aucune donnée valide
-        if (speed == 0f && battery == 0f && voltage == 0f) {
-            Log.d(TAG, "Aucune donnée valide trouvée, génération de données de test")
-            return ScooterData(
-                speed = (15..35).random().toFloat(),
-                battery = (60..95).random().toFloat(),
-                voltage = (42..48).random().toFloat(),
-                current = (2..8).random().toFloat(),
-                power = (100..400).random().toFloat(),
-                temperature = (25..35).random().toFloat(),
-                odometer = (100..500).random().toFloat()
-            )
+        // Calculer la puissance si voltage et courant disponibles
+        if (voltage > 0 && current != 0f) {
+            power = voltage * current
         }
+
+        Log.d(TAG, "Données parsées: speed=$speed, battery=$battery, voltage=$voltage, current=$current, power=$power, temp=$temperature")
 
         return ScooterData(
             speed = speed,
@@ -116,5 +162,21 @@ class BluetoothDataHandler(
 
     private fun bytesToHex(bytes: ByteArray): String {
         return bytes.joinToString(" ") { "%02X".format(it) }
+    }
+
+    /**
+     * Diagnostics pour analyser les patterns de données reçues
+     */
+    fun analyzeDataPattern(data: ByteArray): String {
+        val hex = bytesToHex(data)
+        return when {
+            data.isEmpty() -> "Données vides"
+            data.size == 2 && data.contentEquals(byteArrayOf(0x00, 0x01)) -> "Keep-alive ou état basique"
+            data.size == 4 && data[2] == 0xFF.toByte() && data[3] == 0xFF.toByte() -> "Frame de diagnostic"
+            data.size == 8 && data[0] == 0x08.toByte() -> "Frame de données principales M0Robot"
+            data.size == 16 && data[0] == 0x5A.toByte() -> "Frame étendue M0Robot"
+            data.all { it == 0.toByte() } -> "Données nulles"
+            else -> "Pattern inconnu: $hex"
+        }
     }
 }

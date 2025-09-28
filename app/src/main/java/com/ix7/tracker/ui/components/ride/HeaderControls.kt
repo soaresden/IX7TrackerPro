@@ -1,4 +1,4 @@
-// ui/components/ride/HeaderControls.kt
+// Fichier: ui/components/ride/HeaderControls.kt  
 package com.ix7.tracker.ui.components.ride
 
 import androidx.compose.foundation.layout.*

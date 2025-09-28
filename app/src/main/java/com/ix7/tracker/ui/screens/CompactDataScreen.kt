@@ -1,7 +1,6 @@
 package com.ix7.tracker.ui.screens
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,104 +18,88 @@ fun CompactDataScreen(
     scooterData: ScooterData,
     isConnected: Boolean
 ) {
-    LazyColumn(
+    Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // État de connexion
-        item {
-            StatusCard(
-                text = if (isConnected) "🟢 Connecté" else "🔴 Déconnecté",
-                color = if (isConnected) Color(0xFF4CAF50) else Color(0xFFF44336)
-            )
+        StatusCard(
+            text = if (isConnected) "🟢 Connecté" else "🔴 Déconnecté",
+            color = if (isConnected) Color(0xFF4CAF50) else Color(0xFFF44336)
+        )
+
+        // Section principale - Données temps réel (2x2)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            DataCard("🏃 Vitesse", "${if (isConnected) scooterData.speed.toInt() else 0} km/h", Color(0xFF2196F3), Modifier.weight(1f))
+            DataCard("🔋 Batterie", "${if (isConnected) scooterData.battery.toInt() else 0}%", getBatteryColor(if (isConnected) scooterData.battery else 0f), Modifier.weight(1f))
         }
 
-        // Section Données Temps Réel
-        item {
-            SectionHeader("⚡ Données Temps Réel")
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            DataCard("⚡ Voltage", "${if (isConnected) scooterData.voltage else 0}V", Color(0xFFFF9800), Modifier.weight(1f))
+            DataCard("🌡️ Temp", "${if (isConnected) scooterData.temperature.toInt() else 0}°C", getTemperatureColor(if (isConnected) scooterData.temperature else 0f), Modifier.weight(1f))
         }
 
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+        // Section électrique (1x2)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            DataCard("🔌 Courant", "${if (isConnected) scooterData.current else 0}A", Color(0xFF00BCD4), Modifier.weight(1f))
+            DataCard("💪 Puissance", "${if (isConnected) scooterData.power.toInt() else 0}W", Color(0xFFE91E63), Modifier.weight(1f))
+        }
+
+        // Section historique (1x2)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            DataCard("🛣️ Total", "${if (isConnected) scooterData.odometer else 0}km", Color(0xFF9C27B0), Modifier.weight(1f))
+            DataCard("📍 Trajet", "${if (isConnected) scooterData.tripDistance else 0}km", Color(0xFF795548), Modifier.weight(1f))
+        }
+
+        // Dernière mise à jour
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF607D8B).copy(alpha = 0.1f))
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                DataCard("🏃 Vitesse", "${scooterData.speed.toInt()} km/h", Color(0xFF2196F3), Modifier.weight(1f))
-                DataCard("🔋 Batterie", "${scooterData.battery.toInt()}%", getBatteryColor(scooterData.battery), Modifier.weight(1f))
+                Text(
+                    text = "⏱️",
+                    fontSize = 24.sp,
+                    color = Color(0xFF607D8B)
+                )
+                Text(
+                    text = "Dernière MAJ",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = if (isConnected && scooterData.lastUpdate != null) {
+                        java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(scooterData.lastUpdate)
+                    } else "--:--:--",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF607D8B)
+                )
             }
-        }
-
-        // Section Électrique
-        item {
-            SectionHeader("⚡ Système Électrique")
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                DataCard("⚡ Voltage", "${scooterData.voltage}V", Color(0xFFFF9800), Modifier.weight(1f))
-                DataCard("🔌 Courant", "${scooterData.current}A", Color(0xFF00BCD4), Modifier.weight(1f))
-            }
-        }
-
-        item {
-            DataCard("💪 Puissance", "${scooterData.power.toInt()}W", Color(0xFFE91E63))
-        }
-
-        // Section Températures
-        item {
-            SectionHeader("🌡️ Températures")
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                DataCard("🌡️ Scooter", "${scooterData.temperature.toInt()}°C", getTemperatureColor(scooterData.temperature), Modifier.weight(1f))
-                DataCard("🔥 Batterie", "${scooterData.batteryTemperature.toInt()}°C", getTemperatureColor(scooterData.batteryTemperature), Modifier.weight(1f))
-            }
-        }
-
-        // Section Historique
-        item {
-            SectionHeader("📊 Historique")
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                DataCard("🛣️ Total", "${scooterData.odometer}km", Color(0xFF9C27B0), Modifier.weight(1f))
-                DataCard("📍 Trajet", "${scooterData.tripDistance}km", Color(0xFF795548), Modifier.weight(1f))
-            }
-        }
-
-        item {
-            DataCard("⏱️ Temps Total", scooterData.totalRideTime, Color(0xFF607D8B))
         }
     }
-}
-
-@Composable
-private fun SectionHeader(title: String) {
-    Text(
-        text = title,
-        fontSize = 18.sp,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(vertical = 8.dp)
-    )
 }
 
 @Composable
 private fun StatusCard(text: String, color: Color) {
     Card(
         colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.1f)),
-        modifier = Modifier.fillMaxWidth().height(60.dp)
+        modifier = Modifier.fillMaxWidth().height(50.dp)
     ) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -146,14 +129,14 @@ private fun DataCard(title: String, value: String, color: Color, modifier: Modif
         ) {
             Text(
                 text = title,
-                fontSize = 12.sp,
+                fontSize = 10.sp,
                 color = color,
                 textAlign = TextAlign.Center,
                 fontWeight = FontWeight.Medium
             )
             Text(
                 text = value,
-                fontSize = 16.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = color,
                 textAlign = TextAlign.Center

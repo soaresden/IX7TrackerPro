@@ -1,8 +1,21 @@
-// ui/components/ride/RideModeSelector.kt
+// Fichier: ui/components/ride/RideModeSelector.kt
+package com.ix7.tracker.ui.components.ride
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.ix7.tracker.ui.screens.RideMode
+
 @Composable
 fun RideModeSelector(
-    currentMode: com.ix7.tracker.ui.screens.RideMode,
-    onModeChange: (com.ix7.tracker.ui.screens.RideMode) -> Unit
+    currentMode: RideMode,
+    onModeChange: (RideMode) -> Unit
 ) {
     Card {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -10,7 +23,7 @@ fun RideModeSelector(
                 text = "Mode de conduite",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -20,7 +33,7 @@ fun RideModeSelector(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                com.ix7.tracker.ui.screens.RideMode.values().forEach { mode ->
+                RideMode.values().forEach { mode ->
                     Button(
                         onClick = { onModeChange(mode) },
                         colors = ButtonDefaults.buttonColors(
