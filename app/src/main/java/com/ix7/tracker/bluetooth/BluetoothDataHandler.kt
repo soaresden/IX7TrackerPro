@@ -112,45 +112,34 @@ class BluetoothDataHandler(
         try {
             // Format observé: 08 00 0A 00 00 00 90 01
             // Byte 0: Header (0x08)
-            // Bytes 1-2: Vitesse (little endian, divisé par 100)
-            // Byte 3: Batterie (0-100)
+            // Bytes 1-2: Vitesse (big endian, divisé par 1000)
+            // Byte 3: Réservé
             // Bytes 4-5: Réservé
             // Bytes 6-7: Voltage (little endian, divisé par 100)
 
-            val speedRaw = getShortLE(data, 1)
-            val batteryRaw = data[3].toUByte().toInt()
+            val speedRaw = getShortBE(data, 1)  // Big endian pour vitesse
             val voltageRaw = getShortLE(data, 6)
 
             var hasUpdate = false
             var newData = currentData
 
-            // Vitesse (en km/h)
+            // Vitesse - convertir de 0x000A (10 decimal) à 2.56 km/h
             if (speedRaw in 0..8000) {
-                val speed = speedRaw / 100f
+                val speed = speedRaw * 0.256f  // Facteur de conversion observé
                 if (speed != currentData.speed) {
                     newData = newData.copy(speed = speed)
                     hasUpdate = true
-                    Log.d(TAG, "Vitesse mise à jour: ${speed}km/h")
+                    Log.d(TAG, "Vitesse mise à jour: ${speed}km/h (raw: $speedRaw)")
                 }
             }
 
-            // Batterie (en %)
-            if (batteryRaw in 0..100) {
-                val battery = batteryRaw.toFloat()
-                if (battery != currentData.battery) {
-                    newData = newData.copy(battery = battery)
-                    hasUpdate = true
-                    Log.d(TAG, "Batterie mise à jour: ${battery}%")
-                }
-            }
-
-            // Voltage (en V)
-            if (voltageRaw in 2000..7000) {
-                val voltage = voltageRaw / 100f
+            // Voltage - 0x0190 = 400, divisé par 10 = 40V
+            if (voltageRaw in 200..700) {
+                val voltage = voltageRaw / 10f
                 if (voltage != currentData.voltage) {
                     newData = newData.copy(voltage = voltage)
                     hasUpdate = true
-                    Log.d(TAG, "Voltage mis à jour: ${voltage}V")
+                    Log.d(TAG, "Voltage mis à jour: ${voltage}V (raw: $voltageRaw)")
                 }
             }
 
@@ -175,24 +164,21 @@ class BluetoothDataHandler(
         if (data.size != 16 || data[0] != 0x5A.toByte()) return
 
         try {
-            // Format étendu M0Robot
+            // Format étendu M0Robot: 5A 00 00 34 00 00 00 00 00 00 00 00 00 00 00 71
             // Byte 0: Header (0x5A)
-            // Bytes 1-2: Vitesse
-            // Byte 3: Batterie
+            // Bytes 1-2: Vitesse (big endian)
+            // Byte 3: Batterie (0x34 = 52%)
             // Bytes 4-5: Voltage
             // Byte 6: Température
-            // Bytes 7-8: Courant
-            // Bytes 9-12: Odomètre
-            // Bytes 13-14: Codes d'erreur
+            // Bytes 7-10: Odomètre (4 bytes little endian)
+            // Bytes 11-14: Réservé
             // Byte 15: Checksum
 
-            val speedRaw = getShortLE(data, 1)
+            val speedRaw = getShortBE(data, 1)
             val batteryRaw = data[3].toUByte().toInt()
             val voltageRaw = getShortLE(data, 4)
             val tempRaw = data[6].toUByte().toInt()
-            val currentRaw = getShortLE(data, 7)
-            val odometerRaw = getIntLE(data, 9)
-            val errorCodes = getShortLE(data, 13)
+            val odometerRaw = getIntLE(data, 7)  // 4 bytes pour l'odomètre
 
             var hasUpdate = false
             var newData = currentData
@@ -206,57 +192,23 @@ class BluetoothDataHandler(
                 }
             }
 
-            // Batterie
+            // Batterie (en %) - c'est la donnée fiable dans la frame étendue
             if (batteryRaw in 0..100) {
                 val battery = batteryRaw.toFloat()
                 if (battery != currentData.battery) {
                     newData = newData.copy(battery = battery)
                     hasUpdate = true
+                    Log.d(TAG, "Batterie mise à jour: ${battery}% (raw: $batteryRaw)")
                 }
             }
 
-            // Voltage
-            if (voltageRaw in 2000..7000) {
-                val voltage = voltageRaw / 100f
-                if (voltage != currentData.voltage) {
-                    newData = newData.copy(voltage = voltage)
-                    hasUpdate = true
-                }
-            }
-
-            // Température
-            if (tempRaw in 0..80) {
-                val temperature = tempRaw.toFloat()
-                if (temperature != currentData.temperature) {
-                    newData = newData.copy(temperature = temperature)
-                    hasUpdate = true
-                }
-            }
-
-            // Courant
-            if (currentRaw != 0) {
-                val current = currentRaw / 100f
-                if (current != currentData.current) {
-                    newData = newData.copy(current = current)
-                    hasUpdate = true
-                }
-            }
-
-            // Odomètre
+            // Odomètre - données importantes pour les statistiques
             if (odometerRaw > 0) {
-                val odometer = odometerRaw / 1000f
+                val odometer = odometerRaw / 1000f  // Convertir en km
                 if (odometer != currentData.odometer) {
                     newData = newData.copy(odometer = odometer)
                     hasUpdate = true
-                }
-            }
-
-            // Codes d'erreur
-            if (errorCodes != currentData.errorCodes) {
-                newData = newData.copy(errorCodes = errorCodes)
-                hasUpdate = true
-                if (errorCodes != 0) {
-                    Log.w(TAG, "Codes d'erreur détectés: 0x${errorCodes.toString(16)}")
+                    Log.d(TAG, "Odomètre mis à jour: ${odometer}km (raw: $odometerRaw)")
                 }
             }
 
@@ -444,6 +396,12 @@ class BluetoothDataHandler(
     private fun getShortLE(data: ByteArray, offset: Int): Int {
         return if (offset + 1 < data.size) {
             (data[offset].toInt() and 0xFF) or ((data[offset + 1].toInt() and 0xFF) shl 8)
+        } else 0
+    }
+
+    private fun getShortBE(data: ByteArray, offset: Int): Int {
+        return if (offset + 1 < data.size) {
+            ((data[offset].toInt() and 0xFF) shl 8) or (data[offset + 1].toInt() and 0xFF)
         } else 0
     }
 

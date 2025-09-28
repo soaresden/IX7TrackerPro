@@ -1,4 +1,4 @@
-// RideScreen.kt - Remanié selon spécifications
+// RideScreen.kt - Version compacte et complète
 package com.ix7.tracker.ui.screens
 
 import androidx.compose.foundation.Canvas
@@ -34,8 +34,8 @@ enum class RideMode(val emoji: String, val label: String) {
 }
 
 enum class WheelMode(val emoji: String, val label: String) {
-    ONE_WHEEL("🛴", "Trottinette"),
-    TWO_WHEELS("🏍️", "Moto")
+    ONE_WHEEL("🛴", "1 roue"),
+    TWO_WHEELS("🏍️", "2 roues")
 }
 
 enum class SpeedUnit {
@@ -60,23 +60,18 @@ fun RideScreen(
     var isLocked by remember { mutableStateOf(false) }
     var isRiding by remember { mutableStateOf(false) }
     var isPaused by remember { mutableStateOf(false) }
-    var isDebridged by remember { mutableStateOf(true) } // Mode débridé par défaut
+    var isDebridged by remember { mutableStateOf(true) }
     var showActionsPopup by remember { mutableStateOf(false) }
-
-    // Visibilité des blocs
-    var showSpeedometer by remember { mutableStateOf(true) }
-    var showRideModes by remember { mutableStateOf(true) }
-    var showGraph by remember { mutableStateOf(true) }
-    var showTurnSignals by remember { mutableStateOf(true) }
-    var showControls by remember { mutableStateOf(true) }
-    var showDataTable by remember { mutableStateOf(true) }
+    var leftTurn by remember { mutableStateOf(false) }
+    var rightTurn by remember { mutableStateOf(false) }
+    var warningLights by remember { mutableStateOf(false) }
 
     // Définir les limites de vitesse selon le mode
     val speedLimits = when {
         isDebridged && wheelMode == WheelMode.ONE_WHEEL -> SpeedLimits(20, 30, 40, 50)
         isDebridged && wheelMode == WheelMode.TWO_WHEELS -> SpeedLimits(15, 30, 45, 60)
         !isDebridged && wheelMode == WheelMode.ONE_WHEEL -> SpeedLimits(5, 10, 15, 25)
-        else -> SpeedLimits(5, 10, 15, 25) // Bridé 2 roues
+        else -> SpeedLimits(5, 10, 15, 25)
     }
 
     val maxSpeed = when (rideMode) {
@@ -86,385 +81,348 @@ fun RideScreen(
         RideMode.POWER -> speedLimits.power
     }
 
-    // Convertir en mph si nécessaire
     val displayMaxSpeed = if (speedUnit == SpeedUnit.MPH) (maxSpeed * 0.621371).toInt() else maxSpeed
     val currentSpeed = if (speedUnit == SpeedUnit.MPH) scooterData.speed * 0.621371f else scooterData.speed
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        // Bloc Compteur de vitesse avec Lock
-        if (showSpeedometer) {
-            CollapsibleBlock(
-                title = "Compteur",
-                isVisible = showSpeedometer,
-                onToggleVisibility = { showSpeedometer = !showSpeedometer }
+        // 1. Compteur compact avec lock
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(140.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Compteur en arc
+            CompactSpeedometer(
+                speed = if (isConnected) currentSpeed else 0f,
+                maxSpeed = displayMaxSpeed.toFloat(),
+                modifier = Modifier.weight(1f)
+            )
+
+            // Lock à droite
+            Button(
+                onClick = { isLocked = !isLocked },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isLocked) Color.Red else Color.Green
+                ),
+                modifier = Modifier.size(60.dp),
+                contentPadding = PaddingValues(0.dp)
             ) {
-                SpeedCounterWithLock(
-                    speed = if (isConnected) currentSpeed else 0f,
-                    speedUnit = speedUnit,
-                    maxSpeed = displayMaxSpeed.toFloat(),
-                    isLocked = isLocked,
-                    onLockToggle = { isLocked = !isLocked }
-                )
+                Text(if (isLocked) "🔒" else "🔓", fontSize = 24.sp)
             }
         }
 
-        // Bloc Modes de conduite avec bouton Trottinette/Moto
-        if (showRideModes) {
-            CollapsibleBlock(
-                title = "Mode de conduite",
-                isVisible = showRideModes,
-                onToggleVisibility = { showRideModes = !showRideModes }
-            ) {
-                RideModesWithVehicle(
-                    currentMode = rideMode,
-                    wheelMode = wheelMode,
-                    speedUnit = speedUnit,
-                    speedLimits = speedLimits,
-                    isDebridged = isDebridged,
-                    onModeChange = { rideMode = it },
-                    onWheelModeChange = { wheelMode = it },
-                    onSpeedUnitChange = { speedUnit = it },
-                    onDebridgedToggle = { isDebridged = !isDebridged }
-                )
+        // 2. Mode de conduite compact
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(8.dp)) {
+                // Ligne 1: Type véhicule et contrôles
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Button(
+                            onClick = {
+                                wheelMode = if (wheelMode == WheelMode.ONE_WHEEL) WheelMode.TWO_WHEELS else WheelMode.ONE_WHEEL
+                            },
+                            modifier = Modifier.size(40.dp),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text(wheelMode.emoji, fontSize = 16.sp)
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(wheelMode.label, fontSize = 12.sp)
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Button(
+                            onClick = { isDebridged = !isDebridged },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isDebridged) Color.Red else Color.Gray
+                            ),
+                            modifier = Modifier.height(32.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                        ) {
+                            Text(if (isDebridged) "Débridé" else "Bridé", fontSize = 10.sp)
+                        }
+
+                        Button(
+                            onClick = {
+                                speedUnit = if (speedUnit == SpeedUnit.KMH) SpeedUnit.MPH else SpeedUnit.KMH
+                            },
+                            modifier = Modifier.height(32.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                        ) {
+                            Text(speedUnit.name, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Ligne 2: Modes uniformes
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    RideMode.values().forEach { mode ->
+                        val maxSpeedForMode = when (mode) {
+                            RideMode.PEDESTRIAN -> speedLimits.pedestrian
+                            RideMode.ECO -> speedLimits.eco
+                            RideMode.RACE -> speedLimits.race
+                            RideMode.POWER -> speedLimits.power
+                        }
+
+                        val displaySpeed = if (speedUnit == SpeedUnit.MPH) {
+                            (maxSpeedForMode * 0.621371).toInt()
+                        } else {
+                            maxSpeedForMode
+                        }
+
+                        Button(
+                            onClick = { rideMode = mode },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (rideMode == mode)
+                                    MaterialTheme.colorScheme.primary else
+                                    MaterialTheme.colorScheme.surface
+                            )
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text(mode.emoji, fontSize = 14.sp)
+                                Text(mode.label, fontSize = 8.sp, maxLines = 1)
+                                Text("$displaySpeed", fontSize = 8.sp, color = Color.Gray)
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        // Bloc Graphique de vitesse
-        if (showGraph) {
-            CollapsibleBlock(
-                title = "Graphique temps réel",
-                isVisible = showGraph,
-                onToggleVisibility = { showGraph = !showGraph }
+        // 3. Graphique compact
+        Card(modifier = Modifier.fillMaxWidth().height(100.dp)) {
+            RealTimeSpeedGraph(
+                isRiding = isRiding,
+                currentSpeed = if (isConnected) currentSpeed else 0f,
+                currentBattery = if (isConnected) scooterData.battery else 0f,
+                maxSpeed = displayMaxSpeed.toFloat()
+            )
+        }
+
+        // 4. Clignotants
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            Button(
+                onClick = {
+                    leftTurn = !leftTurn
+                    if (leftTurn) { rightTurn = false; warningLights = false }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (leftTurn) Color(0xFFFFB300) else Color.Gray
+                ),
+                modifier = Modifier.size(40.dp)
             ) {
-                RealTimeSpeedGraph(
-                    isRiding = isRiding,
-                    currentSpeed = if (isConnected) currentSpeed else 0f,
-                    currentBattery = if (isConnected) scooterData.battery else 0f,
-                    maxSpeed = displayMaxSpeed.toFloat()
-                )
+                Text("◀", fontSize = 16.sp, color = Color.White)
+            }
+
+            Button(
+                onClick = {
+                    warningLights = !warningLights
+                    if (warningLights) { leftTurn = false; rightTurn = false }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (warningLights) Color.Red else Color.Gray
+                ),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Text("⚠", fontSize = 16.sp)
+            }
+
+            Button(
+                onClick = {
+                    rightTurn = !rightTurn
+                    if (rightTurn) { leftTurn = false; warningLights = false }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (rightTurn) Color(0xFFFFB300) else Color.Gray
+                ),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Text("▶", fontSize = 16.sp, color = Color.White)
             }
         }
 
-        // Bloc Clignotants
-        if (showTurnSignals) {
-            CollapsibleBlock(
-                title = "Clignotants",
-                isVisible = showTurnSignals,
-                onToggleVisibility = { showTurnSignals = !showTurnSignals }
+        // 5. Contrôles de trajet
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            Button(
+                onClick = { isRiding = true; isPaused = false },
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Green),
+                enabled = !isRiding || isPaused
             ) {
-                TurnSignalsDesign()
+                Text("▶", fontSize = 16.sp)
+            }
+
+            Button(
+                onClick = { isPaused = !isPaused },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9500)),
+                enabled = isRiding
+            ) {
+                Text(if (isPaused) "▶" else "⏸", fontSize = 16.sp)
+            }
+
+            Button(
+                onClick = { isRiding = false; isPaused = false },
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                enabled = isRiding
+            ) {
+                Text("⏹", fontSize = 16.sp)
             }
         }
 
-        // Bloc Contrôles de trajet
-        if (showControls) {
-            CollapsibleBlock(
-                title = "Contrôles",
-                isVisible = showControls,
-                onToggleVisibility = { showControls = !showControls }
+        // 6. Données compactes
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                RideControlButtons(
-                    isRiding = isRiding,
-                    isPaused = isPaused,
-                    onStartRide = { isRiding = true; isPaused = false },
-                    onPauseRide = { isPaused = !isPaused },
-                    onStopRide = { isRiding = false; isPaused = false }
-                )
+                DataItem("Batterie", "${scooterData.battery.toInt()}%")
+                DataItem("Voltage", "${scooterData.voltage}V")
+                DataItem("Odomètre", "${scooterData.odometer}km")
+                DataItem("Temp", "${scooterData.temperature.toInt()}°C")
             }
         }
 
-        // Bloc Tableau de données
-        if (showDataTable) {
-            CollapsibleBlock(
-                title = "Données",
-                isVisible = showDataTable,
-                onToggleVisibility = { showDataTable = !showDataTable }
-            ) {
-                RideDataTable(
-                    scooterData = scooterData,
-                    isConnected = isConnected,
-                    isRiding = isRiding
-                )
-            }
-        }
-
-        // Bouton Actions popup
+        // 7. Actions
         Button(
             onClick = { showActionsPopup = true },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().height(40.dp)
         ) {
             Icon(Icons.Default.Settings, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Actions")
+            Text("Actions", fontSize = 12.sp)
         }
     }
 
     // Popup des actions
     if (showActionsPopup) {
-        ActionsPopup(
-            onDismiss = { showActionsPopup = false }
-        )
+        ActionsPopup(onDismiss = { showActionsPopup = false })
     }
 }
 
 @Composable
-fun CollapsibleBlock(
-    title: String,
-    isVisible: Boolean,
-    onToggleVisibility: () -> Unit,
-    content: @Composable () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onToggleVisibility() }
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
-                Text(
-                    text = if (isVisible) "▲" else "▼",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            if (isVisible) {
-                content()
-            }
-        }
-    }
-}
-
-@Composable
-fun SpeedCounterWithLock(
+fun CompactSpeedometer(
     speed: Float,
-    speedUnit: SpeedUnit,
     maxSpeed: Float,
-    isLocked: Boolean,
-    onLockToggle: () -> Unit
+    modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+    Box(
+        modifier = modifier.height(140.dp),
+        contentAlignment = Alignment.Center
     ) {
-        // Compteur de vitesse
-        Box(
-            modifier = Modifier.weight(1f),
-            contentAlignment = Alignment.Center
-        ) {
-            Canvas(modifier = Modifier.size(180.dp)) {
-                val center = center
-                val radius = size.minDimension / 2 * 0.8f
+        Canvas(modifier = Modifier.size(120.dp)) {
+            val center = center
+            val radius = size.minDimension / 2 * 0.8f
 
-                // Dessiner le cadran
-                drawCircle(
-                    color = Color.Gray,
-                    radius = radius,
-                    style = Stroke(width = 4.dp.toPx())
-                )
+            // Arc de fond
+            drawArc(
+                color = Color.Gray.copy(alpha = 0.3f),
+                startAngle = 180f,
+                sweepAngle = 180f,
+                useCenter = false,
+                style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round)
+            )
 
-                // Dessiner les graduations
-                for (i in 0..maxSpeed.toInt() step (maxSpeed / 5).toInt().coerceAtLeast(1)) {
-                    val angle = (i / maxSpeed) * 240f - 120f
-                    val angleRad = Math.toRadians(angle.toDouble())
-                    val startRadius = radius * 0.85f
-                    val endRadius = radius * 0.95f
+            // Arc de vitesse
+            val speedAngle = (speed / maxSpeed) * 180f
+            drawArc(
+                color = when {
+                    speed < maxSpeed * 0.6f -> Color.Green
+                    speed < maxSpeed * 0.8f -> Color.Yellow
+                    else -> Color.Red
+                },
+                startAngle = 180f,
+                sweepAngle = speedAngle,
+                useCenter = false,
+                style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round)
+            )
 
-                    val startX = center.x + cos(angleRad).toFloat() * startRadius
-                    val startY = center.y + sin(angleRad).toFloat() * startRadius
-                    val endX = center.x + cos(angleRad).toFloat() * endRadius
-                    val endY = center.y + sin(angleRad).toFloat() * endRadius
+            // Graduations
+            for (i in 0..4) {
+                val angle = 180f + (i * 45f)
+                val angleRad = Math.toRadians(angle.toDouble())
+                val startRadius = radius * 0.9f
+                val endRadius = radius
 
-                    drawLine(
-                        color = Color.Gray,
-                        start = androidx.compose.ui.geometry.Offset(startX, startY),
-                        end = androidx.compose.ui.geometry.Offset(endX, endY),
-                        strokeWidth = 2.dp.toPx()
-                    )
-                }
-
-                // Aiguille
-                val normalizedSpeed = (speed / maxSpeed).coerceIn(0f, 1f)
-                val needleAngle = normalizedSpeed * 240f - 120f
-                val needleAngleRad = Math.toRadians(needleAngle.toDouble())
-                val needleLength = radius * 0.7f
-
-                val needleEndX = center.x + cos(needleAngleRad).toFloat() * needleLength
-                val needleEndY = center.y + sin(needleAngleRad).toFloat() * needleLength
+                val startX = center.x + cos(angleRad).toFloat() * startRadius
+                val startY = center.y + sin(angleRad).toFloat() * startRadius
+                val endX = center.x + cos(angleRad).toFloat() * endRadius
+                val endY = center.y + sin(angleRad).toFloat() * endRadius
 
                 drawLine(
-                    color = if (speed > 0) Color.Red else Color.Gray,
-                    start = center,
-                    end = androidx.compose.ui.geometry.Offset(needleEndX, needleEndY),
-                    strokeWidth = 4.dp.toPx(),
-                    cap = StrokeCap.Round
-                )
-
-                drawCircle(
-                    color = Color.Black,
-                    radius = 8.dp.toPx(),
-                    center = center
-                )
-            }
-
-            // Affichage numérique
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.offset(y = 50.dp)
-            ) {
-                Text(
-                    text = "${speed.toInt()}",
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (speed > 0) Color.Red else Color.Gray
-                )
-                Text(
-                    text = "Max: $maxSpeed",
-                    fontSize = 12.sp,
-                    color = Color.Gray
+                    color = Color.Gray,
+                    start = androidx.compose.ui.geometry.Offset(startX, startY),
+                    end = androidx.compose.ui.geometry.Offset(endX, endY),
+                    strokeWidth = 2.dp.toPx()
                 )
             }
         }
 
-        // Bouton de verrouillage
-        Button(
-            onClick = onLockToggle,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (isLocked) Color.Red else Color.Green
-            ),
-            modifier = Modifier.size(80.dp),
-            contentPadding = PaddingValues(0.dp)
+        // Affichage numérique
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.offset(y = 20.dp)
         ) {
             Text(
-                text = if (isLocked) "🔒" else "🔓",
-                fontSize = 32.sp
+                text = "${speed.toInt()}",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = when {
+                    speed < maxSpeed * 0.6f -> Color.Green
+                    speed < maxSpeed * 0.8f -> Color.Yellow
+                    else -> Color.Red
+                }
+            )
+            Text(
+                text = "Max: $maxSpeed",
+                fontSize = 10.sp,
+                color = Color.Gray
             )
         }
     }
 }
 
 @Composable
-fun RideModesWithVehicle(
-    currentMode: RideMode,
-    wheelMode: WheelMode,
-    speedUnit: SpeedUnit,
-    speedLimits: SpeedLimits,
-    isDebridged: Boolean,
-    onModeChange: (RideMode) -> Unit,
-    onWheelModeChange: (WheelMode) -> Unit,
-    onSpeedUnitChange: (SpeedUnit) -> Unit,
-    onDebridgedToggle: () -> Unit
-) {
-    Column(
-        modifier = Modifier.padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        // Ligne du haut: Type véhicule et unité
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(
-                    onClick = {
-                        val newMode = if (wheelMode == WheelMode.ONE_WHEEL) WheelMode.TWO_WHEELS else WheelMode.ONE_WHEEL
-                        onWheelModeChange(newMode)
-                    },
-                    modifier = Modifier.size(60.dp),
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Text(wheelMode.emoji, fontSize = 24.sp)
-                }
-                Text(
-                    text = wheelMode.label,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = onDebridgedToggle,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isDebridged) Color.Red else Color.Gray
-                    )
-                ) {
-                    Text(if (isDebridged) "Débridé" else "Bridé", fontSize = 12.sp)
-                }
-
-                Button(
-                    onClick = {
-                        val newUnit = if (speedUnit == SpeedUnit.KMH) SpeedUnit.MPH else SpeedUnit.KMH
-                        onSpeedUnitChange(newUnit)
-                    }
-                ) {
-                    Text(speedUnit.name, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-
-        // Modes de conduite avec emojis
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            RideMode.values().forEach { mode ->
-                val maxSpeedForMode = when (mode) {
-                    RideMode.PEDESTRIAN -> speedLimits.pedestrian
-                    RideMode.ECO -> speedLimits.eco
-                    RideMode.RACE -> speedLimits.race
-                    RideMode.POWER -> speedLimits.power
-                }
-
-                val displaySpeed = if (speedUnit == SpeedUnit.MPH) {
-                    (maxSpeedForMode * 0.621371).toInt()
-                } else {
-                    maxSpeedForMode
-                }
-
-                Button(
-                    onClick = { onModeChange(mode) },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (currentMode == mode)
-                            MaterialTheme.colorScheme.primary else
-                            MaterialTheme.colorScheme.surface
-                    )
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(mode.emoji, fontSize = 20.sp)
-                        Text(mode.label, fontSize = 10.sp)
-                        Text("$displaySpeed", fontSize = 8.sp, color = Color.Gray)
-                    }
-                }
-            }
-        }
+fun DataItem(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = value,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            color = Color.Gray
+        )
     }
 }
 
@@ -480,140 +438,64 @@ fun RealTimeSpeedGraph(
 
     LaunchedEffect(isRiding, currentSpeed, currentBattery) {
         if (isRiding) {
-            speedHistory = speedHistory.takeLast(99) + currentSpeed
-            batteryHistory = batteryHistory.takeLast(99) + currentBattery
+            speedHistory = speedHistory.takeLast(49) + currentSpeed
+            batteryHistory = batteryHistory.takeLast(49) + currentBattery
         } else {
             speedHistory = emptyList()
             batteryHistory = emptyList()
         }
     }
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(200.dp)
+    Box(
+        modifier = Modifier.fillMaxSize().padding(8.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-        ) {
-            if (speedHistory.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("Appuyez sur Play pour voir le graphique", color = Color.Gray)
-                }
-            } else {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val width = size.width
-                    val height = size.height
-                    val pointSpacing = width / speedHistory.size.coerceAtLeast(1)
-
-                    // Dessiner la grille
-                    for (i in 0..5) {
-                        val y = height * i / 5
-                        drawLine(
-                            color = Color.Gray.copy(alpha = 0.3f),
-                            start = androidx.compose.ui.geometry.Offset(0f, y),
-                            end = androidx.compose.ui.geometry.Offset(width, y),
-                            strokeWidth = 1.dp.toPx()
-                        )
-                    }
-
-                    // Courbe de vitesse (bleue)
-                    val speedPath = Path()
-                    speedHistory.forEachIndexed { index, speed ->
-                        val x = index * pointSpacing
-                        val y = height - (speed / maxSpeed * height)
-                        if (index == 0) {
-                            speedPath.moveTo(x, y)
-                        } else {
-                            speedPath.lineTo(x, y)
-                        }
-                    }
-                    drawPath(
-                        path = speedPath,
-                        color = Color.Blue,
-                        style = Stroke(width = 3.dp.toPx())
-                    )
-
-                    // Courbe de batterie (verte)
-                    val batteryPath = Path()
-                    batteryHistory.forEachIndexed { index, battery ->
-                        val x = index * pointSpacing
-                        val y = height - (battery / 100f * height)
-                        if (index == 0) {
-                            batteryPath.moveTo(x, y)
-                        } else {
-                            batteryPath.lineTo(x, y)
-                        }
-                    }
-                    drawPath(
-                        path = batteryPath,
-                        color = Color.Green,
-                        style = Stroke(width = 3.dp.toPx())
-                    )
-                }
+        if (speedHistory.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("▶ pour démarrer", color = Color.Gray, fontSize = 12.sp)
             }
-        }
-    }
-}
+        } else {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val width = size.width
+                val height = size.height
+                val pointSpacing = width / speedHistory.size.coerceAtLeast(1)
 
-@Composable
-fun TurnSignalsDesign() {
-    var leftTurn by remember { mutableStateOf(false) }
-    var rightTurn by remember { mutableStateOf(false) }
-    var warningLights by remember { mutableStateOf(false) }
+                // Courbe de vitesse (bleue)
+                val                 speedPath = Path()
+                speedHistory.forEachIndexed { index, speed ->
+                    val x = index * pointSpacing
+                    val y = height - (speed / maxSpeed * height)
+                    if (index == 0) {
+                        speedPath.moveTo(x, y)
+                    } else {
+                        speedPath.lineTo(x, y)
+                    }
+                }
+                drawPath(
+                    path = speedPath,
+                    color = Color.Blue,
+                    style = Stroke(width = 2.dp.toPx())
+                )
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Clignotant gauche
-        Button(
-            onClick = {
-                leftTurn = !leftTurn
-                if (leftTurn) { rightTurn = false; warningLights = false }
-            },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (leftTurn) Color(0xFFFFB300) else Color.Gray
-            ),
-            modifier = Modifier.size(60.dp)
-        ) {
-            Text("←", fontSize = 24.sp, color = Color.White)
-        }
-
-        // Warning
-        Button(
-            onClick = {
-                warningLights = !warningLights
-                if (warningLights) { leftTurn = false; rightTurn = false }
-            },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (warningLights) Color.Red else Color.Gray
-            ),
-            modifier = Modifier.size(60.dp)
-        ) {
-            Text("⚠️", fontSize = 24.sp)
-        }
-
-        // Clignotant droit
-        Button(
-            onClick = {
-                rightTurn = !rightTurn
-                if (rightTurn) { leftTurn = false; warningLights = false }
-            },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (rightTurn) Color(0xFFFFB300) else Color.Gray
-            ),
-            modifier = Modifier.size(60.dp)
-        ) {
-            Text("→", fontSize = 24.sp, color = Color.White)
+                // Courbe de batterie (verte)
+                val batteryPath = Path()
+                batteryHistory.forEachIndexed { index, battery ->
+                    val x = index * pointSpacing
+                    val y = height - (battery / 100f * height)
+                    if (index == 0) {
+                        batteryPath.moveTo(x, y)
+                    } else {
+                        batteryPath.lineTo(x, y)
+                    }
+                }
+                drawPath(
+                    path = batteryPath,
+                    color = Color.Green,
+                    style = Stroke(width = 2.dp.toPx())
+                )
+            }
         }
     }
 }
@@ -627,40 +509,62 @@ fun ActionsPopup(
 
     AlertDialog(
         onDismissRequest = { /* Ne se ferme pas automatiquement */ },
-        title = { Text("Actions") },
+        title = { Text("Actions", fontSize = 16.sp) },
         text = {
             Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // Phares avec illustration
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Phares")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (headlights) "💡" else "🔦", fontSize = 20.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Phares", fontSize = 14.sp)
+                    }
                     Switch(
                         checked = headlights,
                         onCheckedChange = { headlights = it }
                     )
                 }
 
+                // Néons avec illustration
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Néons")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (neonLights) "🌈" else "💫", fontSize = 20.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Néons", fontSize = 14.sp)
+                    }
                     Switch(
                         checked = neonLights,
                         onCheckedChange = { neonLights = it }
                     )
                 }
 
+                Divider()
+
+                // Klaxon
                 Button(
                     onClick = { /* TODO: Klaxon */ },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("🔊 Klaxon")
+                    Text("🔊 Klaxon", fontSize = 14.sp)
+                }
+
+                // Enregistrement de trajet
+                Button(
+                    onClick = { /* TODO: Save ride */ },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+                ) {
+                    Text("💾 Enregistrer trajet", fontSize = 14.sp)
                 }
             }
         },
