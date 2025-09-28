@@ -1,11 +1,9 @@
 package com.ix7.tracker.ui.screens
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -14,41 +12,111 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ix7.tracker.core.ScooterData
+import com.ix7.tracker.core.ConnectionState
 
 @Composable
 fun CompactDataScreen(
     scooterData: ScooterData,
     isConnected: Boolean
 ) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.fillMaxSize().padding(16.dp)
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Ligne 1
-        item { StatusCard(if (isConnected) "Connecté" else "Déconnecté", if (isConnected) Color.Green else Color.Red) }
-        item { DataCard("Batterie", "${scooterData.battery.toInt()}%", getBatteryColor(scooterData.battery)) }
+        // État de connexion
+        item {
+            StatusCard(
+                text = if (isConnected) "🟢 Connecté" else "🔴 Déconnecté",
+                color = if (isConnected) Color(0xFF4CAF50) else Color(0xFFF44336)
+            )
+        }
 
-        // Ligne 2
-        item { DataCard("Vitesse", "${scooterData.speed.toInt()} km/h", Color.Blue) }
-        item { DataCard("Voltage", "${scooterData.voltage} V", Color(0xFFFF9800)) }
+        // Section Données Temps Réel
+        item {
+            SectionHeader("⚡ Données Temps Réel")
+        }
 
-        // Ligne 3
-        item { DataCard("Température", "${scooterData.temperature.toInt()}°C", getTemperatureColor(scooterData.temperature)) }
-        item { DataCard("Kilomètrage", "${scooterData.odometer} km", Color(0xFF9C27B0)) }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                DataCard("🏃 Vitesse", "${scooterData.speed.toInt()} km/h", Color(0xFF2196F3), Modifier.weight(1f))
+                DataCard("🔋 Batterie", "${scooterData.battery.toInt()}%", getBatteryColor(scooterData.battery), Modifier.weight(1f))
+            }
+        }
 
-        // Ligne 4
-        item { DataCard("Courant", "${scooterData.current} A", Color(0xFF00BCD4)) }
-        item { DataCard("Puissance", "${scooterData.power.toInt()} W", Color(0xFFE91E63)) }
+        // Section Électrique
+        item {
+            SectionHeader("⚡ Système Électrique")
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                DataCard("⚡ Voltage", "${scooterData.voltage}V", Color(0xFFFF9800), Modifier.weight(1f))
+                DataCard("🔌 Courant", "${scooterData.current}A", Color(0xFF00BCD4), Modifier.weight(1f))
+            }
+        }
+
+        item {
+            DataCard("💪 Puissance", "${scooterData.power.toInt()}W", Color(0xFFE91E63))
+        }
+
+        // Section Températures
+        item {
+            SectionHeader("🌡️ Températures")
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                DataCard("🌡️ Scooter", "${scooterData.temperature.toInt()}°C", getTemperatureColor(scooterData.temperature), Modifier.weight(1f))
+                DataCard("🔥 Batterie", "${scooterData.batteryTemperature.toInt()}°C", getTemperatureColor(scooterData.batteryTemperature), Modifier.weight(1f))
+            }
+        }
+
+        // Section Historique
+        item {
+            SectionHeader("📊 Historique")
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                DataCard("🛣️ Total", "${scooterData.odometer}km", Color(0xFF9C27B0), Modifier.weight(1f))
+                DataCard("📍 Trajet", "${scooterData.tripDistance}km", Color(0xFF795548), Modifier.weight(1f))
+            }
+        }
+
+        item {
+            DataCard("⏱️ Temps Total", scooterData.totalRideTime, Color(0xFF607D8B))
+        }
     }
+}
+
+@Composable
+private fun SectionHeader(title: String) {
+    Text(
+        text = title,
+        fontSize = 18.sp,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(vertical = 8.dp)
+    )
 }
 
 @Composable
 private fun StatusCard(text: String, color: Color) {
     Card(
         colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.1f)),
-        modifier = Modifier.height(80.dp)
+        modifier = Modifier.fillMaxWidth().height(60.dp)
     ) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -58,6 +126,7 @@ private fun StatusCard(text: String, color: Color) {
                 text = text,
                 fontWeight = FontWeight.Bold,
                 color = color,
+                fontSize = 16.sp,
                 textAlign = TextAlign.Center
             )
         }
@@ -65,10 +134,10 @@ private fun StatusCard(text: String, color: Color) {
 }
 
 @Composable
-private fun DataCard(title: String, value: String, color: Color = Color.Gray) {
+private fun DataCard(title: String, value: String, color: Color, modifier: Modifier = Modifier) {
     Card(
         colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.1f)),
-        modifier = Modifier.height(80.dp)
+        modifier = modifier.height(80.dp)
     ) {
         Column(
             modifier = Modifier.fillMaxSize().padding(8.dp),
@@ -78,8 +147,9 @@ private fun DataCard(title: String, value: String, color: Color = Color.Gray) {
             Text(
                 text = title,
                 fontSize = 12.sp,
-                color = Color.Gray,
-                textAlign = TextAlign.Center
+                color = color,
+                textAlign = TextAlign.Center,
+                fontWeight = FontWeight.Medium
             )
             Text(
                 text = value,
