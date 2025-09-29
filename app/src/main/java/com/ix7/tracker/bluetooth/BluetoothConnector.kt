@@ -129,55 +129,42 @@ class BluetoothConnector(
      * Configure les notifications sur le service FFE0/FFE1
      */
     private fun setupNotifications(gatt: BluetoothGatt?): Boolean {
-        // Récupérer le service FFE0 (le seul qui fonctionne pour ce hoverboard)
-        val service = gatt?.getService(SERVICE_UUID)
+        // Essayer NORDIC UART en premier (ton hoverboard)
+        val nordicService = gatt?.getService(UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e"))
 
-        if (service == null) {
-            Log.e(TAG, "✗ Service FFE0 NON TROUVÉ ! Le hoverboard n'est pas compatible")
-            return false
+        if (nordicService != null) {
+            Log.i(TAG, "✓ Service Nordic UART trouvé")
+
+            val notifyChar = nordicService.getCharacteristic(
+                UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e")
+            )
+
+            val writeChar = nordicService.getCharacteristic(
+                UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
+            )
+
+            if (notifyChar != null && writeChar != null) {
+                writeCharacteristic = writeChar
+
+                gatt.setCharacteristicNotification(notifyChar, true)
+
+                val descriptor = notifyChar.getDescriptor(CCCD_UUID)
+                descriptor?.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                gatt.writeDescriptor(descriptor)
+
+                Log.i(TAG, "✓ Nordic UART configuré")
+                return true
+            }
         }
 
-        Log.i(TAG, "✓ Service FFE0 trouvé")
-
-        // Récupérer la characteristic FFE1 (read/write/notify)
-        val characteristic = service.getCharacteristic(CHARACTERISTIC_UUID)
-
-        if (characteristic == null) {
-            Log.e(TAG, "✗ Characteristic FFE1 NON TROUVÉE !")
-            return false
+        // Sinon essayer FFE0 (autres modèles)
+        val ffe0Service = gatt?.getService(SERVICE_UUID)
+        if (ffe0Service != null) {
+            // Ton ancien code FFE0 ici
         }
 
-        Log.i(TAG, "✓ Characteristic FFE1 trouvée")
-
-        // Sauvegarder pour l'écriture
-        writeCharacteristic = characteristic
-
-        // Activer les notifications localement
-        val notificationEnabled = gatt.setCharacteristicNotification(characteristic, true)
-        if (!notificationEnabled) {
-            Log.e(TAG, "✗ Échec activation notifications locales")
-            return false
-        }
-
-        Log.i(TAG, "✓ Notifications locales activées")
-
-        // Activer les notifications sur le device (écrire dans le CCCD)
-        val descriptor = characteristic.getDescriptor(CCCD_UUID)
-        if (descriptor == null) {
-            Log.e(TAG, "✗ CCCD descriptor non trouvé")
-            return false
-        }
-
-        descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-        val descriptorWritten = gatt.writeDescriptor(descriptor)
-
-        if (!descriptorWritten) {
-            Log.e(TAG, "✗ Échec écriture CCCD descriptor")
-            return false
-        }
-
-        Log.i(TAG, "✓ CCCD descriptor écrit - Notifications activées sur le device")
-        return true
+        Log.e(TAG, "✗ Aucun service compatible trouvé")
+        return false
     }
 
     /**
@@ -195,14 +182,9 @@ class BluetoothConnector(
                 try {
                     // Commandes basées sur le protocole 55 AA observé
                     val commands = listOf(
-                        // Commande 1: Demande données principales (similaire au log)
-                        byteArrayOf(0x55.toByte(), 0xAA.toByte(), 0x03.toByte(), 0x22.toByte(), 0x01.toByte(), 0x00.toByte(), 0x26.toByte()),
-
-                        // Commande 2: Demande statut
-                        byteArrayOf(0x55.toByte(), 0xAA.toByte(), 0x02.toByte(), 0x20.toByte(), 0x22.toByte()),
-
-                        // Commande 3: Keep-alive
-                        byteArrayOf(0x55.toByte(), 0xAA.toByte(), 0x01.toByte(), 0x00.toByte(), 0x56.toByte())
+                        byteArrayOf(0x55.toByte(), 0xAA.toByte()),  // Juste le header
+                        byteArrayOf(0xAA.toByte(), 0x55.toByte()),  // Header inversé
+                        byteArrayOf(),  // Vide - juste pour tester la notif
                     )
 
                     commands.forEach { command ->

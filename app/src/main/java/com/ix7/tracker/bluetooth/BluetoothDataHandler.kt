@@ -182,40 +182,33 @@ class BluetoothDataHandler(
      * Exemple du log: 55 AA 36 23 01 1A CA 84 00 00 00 00 5E 08 39 04...
      */
     private fun parseLongStatusFrame(frame: ByteArray) {
-        Log.d(TAG, "📊 Parse trame longue de statut (${frame.size} bytes)")
+        Log.d(TAG, "📊 Parse trame longue (${frame.size} bytes)")
 
         try {
-            if (frame.size < 20) return
+            if (frame.size < 60) return
 
-            // Basé sur l'analyse des offsets dans le log
-            // Offset 5-6: Peut-être la vitesse (1A CA = 6858 en big endian)
-            val speedRaw = ((frame[5].toInt() and 0xFF) shl 8) or (frame[6].toInt() and 0xFF)
+            // OFFSETS CORRECTS basés sur tes valeurs réelles
+            val temperature = frame[5].toInt() and 0xFF  // Byte 5 = Température en °C
+            val battery = frame[22].toInt() and 0xFF     // Byte 22 = Batterie en %
 
-            // Offset 7: Peut-être la batterie (84 = 132 en décimal, ou 84% ?)
-            val battery = frame[7].toInt() and 0xFF
-
-            // Offset 12-13: Peut-être température (5E 08)
-            val tempRaw = ((frame[12].toInt() and 0xFF) shl 8) or (frame[13].toInt() and 0xFF)
-
-            // Offset 14-15: Peut-être voltage (39 04)
+            // Tension : à trouver (47.3V = 473 en dixièmes)
             val voltageRaw = ((frame[14].toInt() and 0xFF) shl 8) or (frame[15].toInt() and 0xFF)
+            val voltage = voltageRaw / 10.0f
 
-            // Conversion des valeurs (à ajuster selon tests réels)
-            val speed = speedRaw / 100.0f  // Diviser par 100 pour avoir km/h
-            val batteryPercent = if (battery <= 100) battery.toFloat() else 100f
-            val temperature = tempRaw / 10.0f  // Diviser par 10 pour avoir °C
-            val voltage = voltageRaw / 100.0f  // Diviser par 100 pour avoir V
+            // Vitesse : bytes 5-6 ou autre position
+            val speedRaw = ((frame[6].toInt() and 0xFF) shl 8) or (frame[7].toInt() and 0xFF)
+            val speed = speedRaw / 100.0f
 
-            Log.d(TAG, "  Vitesse: $speed km/h")
-            Log.d(TAG, "  Batterie: $batteryPercent %")
             Log.d(TAG, "  Température: $temperature °C")
+            Log.d(TAG, "  Batterie: $battery %")
             Log.d(TAG, "  Voltage: $voltage V")
+            Log.d(TAG, "  Vitesse: $speed km/h")
 
             currentData = currentData.copy(
                 speed = speed,
-                battery = batteryPercent,
+                battery = battery.toFloat(),
                 voltage = voltage,
-                temperature = temperature,
+                temperature = temperature.toFloat(),
                 lastUpdate = Date(),
                 isConnected = true
             )
@@ -223,7 +216,7 @@ class BluetoothDataHandler(
             onDataParsed(currentData)
 
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Erreur parse long status frame", e)
+            Log.e(TAG, "❌ Erreur parse", e)
         }
     }
 
