@@ -53,8 +53,10 @@ object ProtocolConstants {
     const val OFFSET_VOLTAGE = 8
     const val OFFSET_CURRENT = 10
     const val OFFSET_TEMPERATURE = 12
-    const val OFFSET_ERROR_CODES = 14
-    const val OFFSET_WARNING_CODES = 16
+    const val OFFSET_ODOMETER = 14          // AJOUTÉ : Position de l'odomètre
+    const val OFFSET_TRIP = 16              // AJOUTÉ : Position du trajet
+    const val OFFSET_ERROR_CODES = 18
+    const val OFFSET_WARNING_CODES = 19
 }
 
 /**

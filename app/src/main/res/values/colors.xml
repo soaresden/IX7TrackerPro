@@ -5,4 +5,5 @@
     <color name="blue_primary">#FF2196F3</color>
     <color name="blue_dark">#FF1976D2</color>
     <color name="teal_accent">#FF4CAF50</color>
+    <color name="ic_launcher_background">#0B4A6F</color>  <!-- Bleu du logo -->
 </resources>
