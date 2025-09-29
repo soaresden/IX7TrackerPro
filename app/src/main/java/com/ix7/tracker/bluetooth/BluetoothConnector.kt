@@ -2,15 +2,13 @@ package com.ix7.tracker.bluetooth
 
 import android.bluetooth.*
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import com.ix7.tracker.core.ConnectionState
 import kotlinx.coroutines.*
 import java.util.*
 
-/**
- * Gestionnaire de connexion Bluetooth CORRIGÉ pour hoverboards utilisant le protocole FFE0/FFE1
- * Basé sur l'analyse de l'application officielle
- */
 class BluetoothConnector(
     private val context: Context,
     private val onStateChange: (ConnectionState) -> Unit
@@ -18,9 +16,10 @@ class BluetoothConnector(
     companion object {
         private const val TAG = "BluetoothConnector"
 
-        // UUIDs CORRECTS pour le hoverboard (protocole 55 AA)
-        private val SERVICE_UUID = UUID.fromString("0000ffe0-0000-1000-8000-00805f9b34fb")
-        private val CHARACTERISTIC_UUID = UUID.fromString("0000ffe1-0000-1000-8000-00805f9b34fb")
+        // UUIDs CORRECTS - Nordic UART Service (votre robot)
+        private val SERVICE_UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
+        private val TX_CHAR_UUID = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
+        private val RX_CHAR_UUID = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e")
         private val CCCD_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
     }
 
@@ -29,22 +28,38 @@ class BluetoothConnector(
     private var onDataReceived: ((ByteArray) -> Unit)? = null
     private var dataRequestJob: Job? = null
     private var writeCharacteristic: BluetoothGattCharacteristic? = null
+    private var currentDeviceAddress: String? = null
+    private var reconnectAttempts = 0
+    private val maxReconnectAttempts = 3
+    private val handler = Handler(Looper.getMainLooper())
 
     private val gattCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
-            when (newState) {
-                BluetoothProfile.STATE_CONNECTED -> {
-                    Log.i(TAG, "✓ Connecté au hoverboard - Découverte des services...")
+            when {
+                newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS -> {
+                    Log.i(TAG, "✓ Connecté au robot - Attente stabilisation...")
                     onStateChange(ConnectionState.CONNECTED)
-                    gatt?.discoverServices()
+                    reconnectAttempts = 0
+
+                    handler.postDelayed({
+                        Log.i(TAG, "→ Découverte des services...")
+                        gatt?.discoverServices()
+                    }, 600)
                 }
-                BluetoothProfile.STATE_DISCONNECTED -> {
-                    Log.i(TAG, "✗ Déconnecté du hoverboard")
+
+                newState == BluetoothProfile.STATE_DISCONNECTED -> {
+                    Log.i(TAG, "✗ Déconnecté (status: $status)")
                     onStateChange(ConnectionState.DISCONNECTED)
                     dataRequestJob?.cancel()
-                    cleanup()
+
+                    if ((status == 133 || status == 62) && reconnectAttempts < maxReconnectAttempts) {
+                        reconnectAttempts++
+                        Log.w(TAG, "⟳ Reconnexion $reconnectAttempts/$maxReconnectAttempts")
+                        reconnectWithDelay()
+                    }
                 }
-                BluetoothProfile.STATE_CONNECTING -> {
+
+                newState == BluetoothProfile.STATE_CONNECTING -> {
                     Log.d(TAG, "→ Connexion en cours...")
                     onStateChange(ConnectionState.CONNECTING)
                 }
@@ -57,60 +72,55 @@ class BluetoothConnector(
                 logAllServices(gatt)
 
                 if (setupNotifications(gatt)) {
-                    Log.i(TAG, "✓ Notifications configurées - Démarrage demande de données")
+                    Log.i(TAG, "✓ Configuration réussie - Prêt !")
                     startDataRequests(gatt)
                 } else {
-                    Log.e(TAG, "✗ Échec configuration notifications")
+                    Log.e(TAG, "✗ Échec configuration")
                     onStateChange(ConnectionState.ERROR)
                 }
-            } else {
-                Log.e(TAG, "✗ Échec découverte services: $status")
-                onStateChange(ConnectionState.ERROR)
-            }
-        }
-
-        override fun onCharacteristicRead(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?, status: Int) {
-            if (status == BluetoothGatt.GATT_SUCCESS && characteristic != null) {
-                characteristic.value?.let { data ->
-                    val hex = data.joinToString(" ") { "%02X".format(it) }
-                    Log.d(TAG, "📖 Données lues (${data.size} bytes): $hex")
-                    onDataReceived?.invoke(data)
-                }
-            } else {
-                Log.w(TAG, "Échec lecture: $status")
             }
         }
 
         override fun onCharacteristicChanged(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?) {
             characteristic?.value?.let { data ->
                 val hex = data.joinToString(" ") { "%02X".format(it) }
-                Log.d(TAG, "🔔 Notification reçue (${data.size} bytes): $hex")
+                Log.d(TAG, "🔔 Notification (${data.size}B): $hex")
                 onDataReceived?.invoke(data)
             }
         }
 
-        override fun onCharacteristicWrite(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?, status: Int) {
+        override fun onCharacteristicWrite(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            status: Int
+        ) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                Log.d(TAG, "✓ Commande envoyée avec succès")
-            } else {
-                Log.e(TAG, "✗ Échec envoi commande: $status")
+                val data = characteristic.value
+                Log.d(TAG, "✓ Écriture OK - Envoyé: ${data.joinToString(" ") { "%02X".format(it) }}")
             }
         }
 
         override fun onDescriptorWrite(gatt: BluetoothGatt?, descriptor: BluetoothGattDescriptor?, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                Log.i(TAG, "✓ Descriptor écrit avec succès (notifications activées)")
-            } else {
-                Log.e(TAG, "✗ Échec écriture descriptor: $status")
+                Log.i(TAG, "✓ CCCD écrit - Notifications ON")
             }
         }
     }
 
-    /**
-     * Log tous les services disponibles pour diagnostic
-     */
+    private fun reconnectWithDelay() {
+        handler.postDelayed({
+            currentDeviceAddress?.let { address ->
+                bluetoothGatt?.close()
+                bluetoothGatt = null
+                bluetoothAdapter?.getRemoteDevice(address)?.let {
+                    bluetoothGatt = it.connectGatt(context, false, gattCallback)
+                }
+            }
+        }, 2000)
+    }
+
     private fun logAllServices(gatt: BluetoothGatt?) {
-        Log.d(TAG, "=== Services Bluetooth disponibles ===")
+        Log.d(TAG, "=== Services disponibles ===")
         gatt?.services?.forEach { service ->
             Log.d(TAG, "Service: ${service.uuid}")
             service.characteristics.forEach { char ->
@@ -119,165 +129,126 @@ class BluetoothConnector(
                 if (char.properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0) props.add("WRITE")
                 if (char.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0) props.add("WRITE_NO_RESP")
                 if (char.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0) props.add("NOTIFY")
-                Log.d(TAG, "  └─ Char: ${char.uuid} [${props.joinToString(", ")}]")
+                Log.d(TAG, "  └─ ${char.uuid} [${props.joinToString()}]")
             }
         }
-        Log.d(TAG, "====================================")
     }
 
-    /**
-     * Configure les notifications sur le service FFE0/FFE1
-     */
     private fun setupNotifications(gatt: BluetoothGatt?): Boolean {
-        // Essayer NORDIC UART en premier (ton hoverboard)
-        val nordicService = gatt?.getService(UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e"))
-
-        if (nordicService != null) {
-            Log.i(TAG, "✓ Service Nordic UART trouvé")
-
-            val notifyChar = nordicService.getCharacteristic(
-                UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e")
-            )
-
-            val writeChar = nordicService.getCharacteristic(
-                UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
-            )
-
-            if (notifyChar != null && writeChar != null) {
-                writeCharacteristic = writeChar
-
-                gatt.setCharacteristicNotification(notifyChar, true)
-
-                val descriptor = notifyChar.getDescriptor(CCCD_UUID)
-                descriptor?.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                gatt.writeDescriptor(descriptor)
-
-                Log.i(TAG, "✓ Nordic UART configuré")
-                return true
-            }
+        val service = gatt?.getService(SERVICE_UUID)
+        if (service == null) {
+            Log.e(TAG, "✗ Service Nordic UART non trouvé")
+            return false
         }
 
-        // Sinon essayer FFE0 (autres modèles)
-        val ffe0Service = gatt?.getService(SERVICE_UUID)
-        if (ffe0Service != null) {
-            // Ton ancien code FFE0 ici
+        val rxChar = service.getCharacteristic(RX_CHAR_UUID)
+        if (rxChar == null) {
+            Log.e(TAG, "✗ Caractéristique RX non trouvée")
+            return false
         }
 
-        Log.e(TAG, "✗ Aucun service compatible trouvé")
-        return false
+        writeCharacteristic = service.getCharacteristic(TX_CHAR_UUID)
+        if (writeCharacteristic == null) {
+            Log.e(TAG, "✗ Caractéristique TX non trouvée")
+            return false
+        }
+
+        val notifyEnabled = gatt.setCharacteristicNotification(rxChar, true)
+        if (!notifyEnabled) {
+            Log.e(TAG, "✗ Échec activation notifications")
+            return false
+        }
+
+        val descriptor = rxChar.getDescriptor(CCCD_UUID)
+        if (descriptor == null) {
+            Log.e(TAG, "✗ Descripteur CCCD non trouvé")
+            return false
+        }
+
+        descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+        return gatt.writeDescriptor(descriptor)
     }
 
-    /**
-     * Envoie périodiquement des commandes pour demander les données
-     */
     private fun startDataRequests(gatt: BluetoothGatt?) {
         dataRequestJob?.cancel()
-
         dataRequestJob = CoroutineScope(Dispatchers.IO).launch {
-            delay(1000) // Attendre que les notifications soient bien activées
-
-            Log.i(TAG, "🚀 Démarrage des demandes de données périodiques")
+            delay(1000)
+            Log.i(TAG, "🚀 Démarrage des demandes de données")
 
             while (isActive) {
                 try {
-                    // Commandes basées sur le protocole 55 AA observé
-                    val commands = listOf(
-                        byteArrayOf(0x55.toByte(), 0xAA.toByte()),  // Juste le header
-                        byteArrayOf(0xAA.toByte(), 0x55.toByte()),  // Header inversé
-                        byteArrayOf(),  // Vide - juste pour tester la notif
+                    // Commande 1: Demande de statut (0x20)
+                    val cmd1 = byteArrayOf(
+                        0x55.toByte(), 0xAA.toByte(),  // Header
+                        0x02.toByte(),                  // Length
+                        0x20.toByte(),                  // Command: STATUS
+                        0x01.toByte(),                  // SubCommand
+                        0x23.toByte()                   // Checksum
                     )
+                    sendCommandInternal(gatt, cmd1)
+                    delay(500)
 
-                    commands.forEach { command ->
-                        sendCommandInternal(gatt, command)
-                        delay(500) // Délai entre les commandes
-                    }
+                    // Commande 2: Demande de données (0x22)
+                    val cmd2 = byteArrayOf(
+                        0x55.toByte(), 0xAA.toByte(),  // Header
+                        0x02.toByte(),                  // Length
+                        0x22.toByte(),                  // Command: REQUEST_DATA
+                        0x01.toByte(),                  // SubCommand
+                        0x21.toByte()                   // Checksum
+                    )
+                    sendCommandInternal(gatt, cmd2)
+                    delay(2000)
 
-                    delay(2000) // Répéter toutes les 2 secondes
                 } catch (e: Exception) {
-                    Log.e(TAG, "Erreur lors de la demande de données", e)
+                    Log.e(TAG, "Erreur envoi commande", e)
                 }
             }
         }
     }
 
-    /**
-     * Envoie une commande sur la characteristic FFE1
-     */
     private fun sendCommandInternal(gatt: BluetoothGatt?, command: ByteArray) {
-        val char = writeCharacteristic
-
-        if (char == null) {
-            Log.e(TAG, "✗ Write characteristic non disponible")
-            return
-        }
-
-        try {
+        writeCharacteristic?.let { char ->
             char.value = command
-            val success = gatt?.writeCharacteristic(char) ?: false
-
-            val hex = command.joinToString(" ") { "%02X".format(it) }
-            if (success) {
-                Log.d(TAG, "📤 Commande envoyée: $hex")
-            } else {
-                Log.w(TAG, "⚠ Échec envoi commande: $hex")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "✗ Exception envoi commande", e)
+            gatt?.writeCharacteristic(char)
         }
     }
 
     fun connect(address: String, dataCallback: (ByteArray) -> Unit): Result<Unit> {
         return try {
+            currentDeviceAddress = address
             onDataReceived = dataCallback
-            val device = bluetoothAdapter?.getRemoteDevice(address)
+            reconnectAttempts = 0
 
-            if (device != null) {
+            bluetoothAdapter?.getRemoteDevice(address)?.let { device ->
                 Log.i(TAG, "→ Connexion à $address...")
                 onStateChange(ConnectionState.CONNECTING)
                 bluetoothGatt?.close()
                 bluetoothGatt = device.connectGatt(context, false, gattCallback)
                 Result.success(Unit)
-            } else {
-                Log.e(TAG, "✗ Device non trouvé: $address")
-                onStateChange(ConnectionState.ERROR)
-                Result.failure(Exception("Device not found"))
-            }
+            } ?: Result.failure(Exception("Device not found"))
         } catch (e: Exception) {
-            Log.e(TAG, "✗ Exception lors de la connexion", e)
             onStateChange(ConnectionState.ERROR)
             Result.failure(e)
         }
     }
 
     fun disconnect(): Result<Unit> {
-        return try {
-            Log.i(TAG, "→ Déconnexion...")
-            dataRequestJob?.cancel()
-            bluetoothGatt?.disconnect()
-            onStateChange(ConnectionState.DISCONNECTED)
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Log.e(TAG, "✗ Erreur déconnexion", e)
-            Result.failure(e)
-        }
+        dataRequestJob?.cancel()
+        reconnectAttempts = maxReconnectAttempts
+        bluetoothGatt?.disconnect()
+        onStateChange(ConnectionState.DISCONNECTED)
+        return Result.success(Unit)
     }
 
     fun sendCommand(command: ByteArray): Result<Unit> {
-        return try {
-            sendCommandInternal(bluetoothGatt, command)
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Log.e(TAG, "✗ Erreur envoi commande", e)
-            Result.failure(e)
-        }
+        sendCommandInternal(bluetoothGatt, command)
+        return Result.success(Unit)
     }
 
     fun cleanup() {
+        handler.removeCallbacksAndMessages(null)
         dataRequestJob?.cancel()
         bluetoothGatt?.close()
         bluetoothGatt = null
-        onDataReceived = null
-        writeCharacteristic = null
-        Log.d(TAG, "Nettoyage effectué")
     }
 }
