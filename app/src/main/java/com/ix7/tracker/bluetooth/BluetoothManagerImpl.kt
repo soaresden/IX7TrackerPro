@@ -20,7 +20,6 @@ class BluetoothManagerImpl(private val context: Context) : BluetoothRepository {
             _scooterData.value = scooterData
         },
         sendCommand = { command ->
-            // Déléguer l'envoi de commande au connector
             connector.sendCommand(command)
         }
     )
