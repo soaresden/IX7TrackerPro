@@ -36,25 +36,25 @@ object ScooterDetector {
 
         val type = when {
             // Type 2 - Protocole Nordic UART
-            deviceName.startsWith("MQRobot", ignoreCase = true) -> ScooterType.TYPE_2
-            deviceName.startsWith("Nordic", ignoreCase = true) -> ScooterType.TYPE_2
+            deviceName.startsWith("MQRobot", ignoreCase = true) -> ScooterType.TYPE_NORDIC
+            deviceName.startsWith("Nordic", ignoreCase = true) -> ScooterType.TYPE_NORDIC
 
             // Type 3 - Protocole AE00 (certains M6)
-            deviceName.startsWith("M6", ignoreCase = true) -> ScooterType.TYPE_3
-            deviceName.startsWith("A6", ignoreCase = true) -> ScooterType.TYPE_3
+            deviceName.startsWith("M6", ignoreCase = true) -> ScooterType.TYPE_AE00
+            deviceName.startsWith("A6", ignoreCase = true) -> ScooterType.TYPE_AE00
 
             // Type 4 - Protocole FFF0
-            deviceName.startsWith("MAX", ignoreCase = true) -> ScooterType.TYPE_4
-            deviceName.startsWith("NEXRIDE", ignoreCase = true) -> ScooterType.TYPE_4
+            deviceName.startsWith("MAX", ignoreCase = true) -> ScooterType.TYPE_FFF0
+            deviceName.startsWith("NEXRIDE", ignoreCase = true) -> ScooterType.TYPE_FFF0
 
             // Type 1 - Protocole standard (FFE0) - Par défaut pour M0, H1, etc.
-            deviceName.startsWith("M0", ignoreCase = true) -> ScooterType.TYPE_1
-            deviceName.startsWith("H1", ignoreCase = true) -> ScooterType.TYPE_1
-            deviceName.startsWith("Mini", ignoreCase = true) -> ScooterType.TYPE_1
-            deviceName.startsWith("Plus", ignoreCase = true) -> ScooterType.TYPE_1
+            deviceName.startsWith("M0", ignoreCase = true) -> ScooterType.TYPE_FFE0
+            deviceName.startsWith("H1", ignoreCase = true) -> ScooterType.TYPE_FFE0
+            deviceName.startsWith("Mini", ignoreCase = true) -> ScooterType.TYPE_FFE0
+            deviceName.startsWith("Plus", ignoreCase = true) -> ScooterType.TYPE_FFE0
 
             // Défaut pour tous les autres scooters reconnus
-            isScooterDevice(deviceName) -> ScooterType.TYPE_1
+            isScooterDevice(deviceName) -> ScooterType.TYPE_FFE0
 
             else -> ScooterType.UNKNOWN
         }
