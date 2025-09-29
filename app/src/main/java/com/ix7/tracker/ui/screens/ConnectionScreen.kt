@@ -83,6 +83,25 @@ fun ConnectionScreen(
                         Text("Déconnecter")
                     }
                 }
+
+                // Bouton Unlock (si connecté)
+                if (connectionState == ConnectionState.CONNECTED) {
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                bluetoothManager.unlockScooter()
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Text("🔓 Déverrouiller")
+                    }
+                }
+
+
             }
         }
 

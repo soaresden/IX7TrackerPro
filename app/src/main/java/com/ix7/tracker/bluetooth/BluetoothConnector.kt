@@ -29,11 +29,12 @@ class BluetoothConnector(
         override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
-                    Log.i(TAG, "Connecté - Découverte des services...")
-                    gatt?.discoverServices()
+                    Log.i(TAG, "Connected to GATT server.")
+                    callback.onConnected()
+                    Log.i(TAG, "Attempting to start service discovery: ${gatt?.discoverServices()}")
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
-                    Log.i(TAG, "Déconnecté")
+                    Log.i(TAG, "Disconnected from GATT server.")
                     callback.onDisconnected()
                 }
             }
@@ -41,19 +42,24 @@ class BluetoothConnector(
 
         override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                Log.i(TAG, "Services découverts")
+                Log.i(TAG, "Services discovered")
 
                 val service = gatt?.getService(SERVICE_UUID)
                 if (service != null) {
                     txCharacteristic = service.getCharacteristic(TX_CHAR_UUID)
                     rxCharacteristic = service.getCharacteristic(RX_CHAR_UUID)
 
-                    // EXACTEMENT comme l'appli officielle : activation immédiate
+                    // Activer les notifications comme l'appli officielle
                     rxCharacteristic?.let { enableNotifications(it) }
+
+                    // Notifier que les services sont découverts
+                    callback.onServicesDiscovered()
                 } else {
-                    Log.e(TAG, "Service non trouvé")
-                    callback.onError("Service non trouvé")
+                    Log.e(TAG, "Service not found")
+                    callback.onError("Service not found")
                 }
+            } else {
+                Log.w(TAG, "onServicesDiscovered received: $status")
             }
         }
 
@@ -63,12 +69,9 @@ class BluetoothConnector(
             status: Int
         ) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                Log.d(TAG, "Descriptor écrit avec succès")
-
-                // EXACTEMENT comme l'appli officielle : délai de 200ms
-                handler.postDelayed({
-                    sendUnlockCommand()
-                }, 200)
+                Log.d(TAG, "Descriptor written successfully")
+                // L'appli officielle ne fait RIEN ici automatiquement
+                // Elle attend un événement externe (bouton UI, etc.)
             }
         }
 
@@ -78,7 +81,9 @@ class BluetoothConnector(
             status: Int
         ) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                Log.d(TAG, "Commande envoyée")
+                Log.d(TAG, "Characteristic written successfully")
+            } else {
+                Log.e(TAG, "Characteristic write failed: $status")
             }
         }
 
@@ -87,9 +92,9 @@ class BluetoothConnector(
             characteristic: BluetoothGattCharacteristic?
         ) {
             characteristic?.value?.let { data ->
-                Log.d(TAG, "Données reçues: ${data.joinToString(" ") { "%02X".format(it) }}")
+                Log.d(TAG, "Data received: ${data.joinToString(" ") { "%02X".format(it) }}")
 
-                // Vérification header AA 55 comme l'appli officielle
+                // Vérification header AA 55
                 if (data.size >= 2 && data[0] == 0xAA.toByte() && data[1] == 0x55.toByte()) {
                     callback.onDataReceived(data)
                 }
@@ -98,12 +103,12 @@ class BluetoothConnector(
     }
 
     fun connect(device: BluetoothDevice) {
-        Log.i(TAG, "Connexion à ${device.address}...")
+        Log.i(TAG, "Connecting to ${device.address}...")
         bluetoothGatt = device.connectGatt(context, false, gattCallback)
     }
 
     private fun enableNotifications(characteristic: BluetoothGattCharacteristic) {
-        Log.i(TAG, "Activation notifications pour ${characteristic.uuid}")
+        Log.i(TAG, "Enabling notifications for ${characteristic.uuid}")
 
         bluetoothGatt?.setCharacteristicNotification(characteristic, true)
 
@@ -112,20 +117,19 @@ class BluetoothConnector(
         bluetoothGatt?.writeDescriptor(descriptor)
     }
 
-    private fun sendUnlockCommand() {
-        Log.d(TAG, "=== ENVOI COMMANDE UNLOCK ===")
+    // Méthode publique pour envoyer la commande unlock MANUELLEMENT
+    fun sendUnlockCommand() {
+        Log.d(TAG, "=== SENDING UNLOCK COMMAND ===")
 
         txCharacteristic?.let { char ->
-            // Commande exacte de l'appli officielle
             val command = byteArrayOf(0xAA.toByte(), 0x55, 0x03, 0x00, 0x02, 0xB9.toByte())
-            Log.d(TAG, "Commande: ${command.joinToString(" ") { "%02X".format(it) }}")
+            Log.d(TAG, "Command: ${command.joinToString(" ") { "%02X".format(it) }}")
 
             char.value = command
-            // IMPORTANT : WRITE_TYPE_NO_RESPONSE comme l'appli officielle
             char.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
 
             bluetoothGatt?.writeCharacteristic(char)
-        }
+        } ?: Log.e(TAG, "TX Characteristic is null")
     }
 
     fun disconnect() {
@@ -137,6 +141,7 @@ class BluetoothConnector(
     interface ConnectionCallback {
         fun onConnected()
         fun onDisconnected()
+        fun onServicesDiscovered()  // NOUVEAU
         fun onDataReceived(data: ByteArray)
         fun onError(message: String)
     }

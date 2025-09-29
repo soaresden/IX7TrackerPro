@@ -15,7 +15,6 @@ class BluetoothManagerImpl(private val context: Context) : BluetoothRepository {
         private const val TAG = "BluetoothManager"
     }
 
-    // Scanner et Connector
     private var scanner: BluetoothScanner? = null
     private var connector: BluetoothConnector? = null
 
@@ -24,54 +23,57 @@ class BluetoothManagerImpl(private val context: Context) : BluetoothRepository {
         manager.adapter
     }
 
-    // États observables
+    // États
     override val discoveredDevices = MutableStateFlow<List<BluetoothDeviceInfo>>(emptyList())
     override val connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     override val scooterData = MutableStateFlow(ScooterData())
     override val isScanning = MutableStateFlow(false)
 
-    // Callback du connector
     private val connectionCallback = object : BluetoothConnector.ConnectionCallback {
         override fun onConnected() {
-            Log.d(TAG, "✅ Connecté")
+            Log.d(TAG, "✅ Connected")
             connectionState.value = ConnectionState.CONNECTED
         }
 
         override fun onDisconnected() {
-            Log.d(TAG, "❌ Déconnecté")
+            Log.d(TAG, "❌ Disconnected")
             connectionState.value = ConnectionState.DISCONNECTED
         }
 
+        override fun onServicesDiscovered() {
+            Log.d(TAG, "📋 Services discovered - Ready to send commands")
+            // L'appli officielle ne fait RIEN automatiquement ici
+            // Vous devez appeler sendUnlockCommand() manuellement depuis l'UI
+        }
+
         override fun onDataReceived(data: ByteArray) {
-            Log.d(TAG, "📥 Données: ${data.joinToString(" ") { "%02X".format(it) }}")
-            // TODO: Parser et mettre à jour scooterData
+            Log.d(TAG, "📥 Data: ${data.joinToString(" ") { "%02X".format(it) }}")
+            // TODO: Parser les données
         }
 
         override fun onError(message: String) {
-            Log.e(TAG, "❌ Erreur: $message")
+            Log.e(TAG, "❌ Error: $message")
             connectionState.value = ConnectionState.DISCONNECTED
         }
     }
 
-    // Initialisation
     override fun initialize(): Result<Unit> {
         return try {
             scanner = BluetoothScanner(context) { devices ->
                 discoveredDevices.value = devices
             }
             scanner?.initialize()
-            Log.d(TAG, "✅ Initialisé")
+            Log.d(TAG, "✅ Initialized")
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Erreur init: ${e.message}")
+            Log.e(TAG, "❌ Init error: ${e.message}")
             Result.failure(e)
         }
     }
 
-    // SCAN
     override suspend fun startScan(): Result<Unit> {
         isScanning.value = true
-        val result = scanner?.startScan() ?: Result.failure(Exception("Scanner non initialisé"))
+        val result = scanner?.startScan() ?: Result.failure(Exception("Scanner not initialized"))
         if (result.isFailure) {
             isScanning.value = false
         }
@@ -80,32 +82,27 @@ class BluetoothManagerImpl(private val context: Context) : BluetoothRepository {
 
     override suspend fun stopScan(): Result<Unit> {
         isScanning.value = false
-        return scanner?.stopScan() ?: Result.failure(Exception("Scanner non initialisé"))
+        return scanner?.stopScan() ?: Result.failure(Exception("Scanner not initialized"))
     }
 
-    // CONNEXION
     override suspend fun connectToDevice(address: String): Result<Unit> {
         return try {
-            Log.d(TAG, "🔗 Connexion à $address")
+            Log.d(TAG, "🔗 Connecting to $address")
 
-            // Arrêter le scan
             stopScan()
-
             connectionState.value = ConnectionState.CONNECTING
 
-            // Créer le BluetoothDevice
             val device = bluetoothAdapter?.getRemoteDevice(address)
-                ?: return Result.failure(Exception("BluetoothAdapter non disponible"))
+                ?: return Result.failure(Exception("BluetoothAdapter unavailable"))
 
             Log.d(TAG, "📱 Device: ${device.name} (${device.address})")
 
-            // Créer et connecter
             connector = BluetoothConnector(context, connectionCallback)
             connector?.connect(device)
 
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Erreur connexion: ${e.message}")
+            Log.e(TAG, "❌ Connection error: ${e.message}")
             connectionState.value = ConnectionState.DISCONNECTED
             Result.failure(e)
         }
@@ -132,20 +129,28 @@ class BluetoothManagerImpl(private val context: Context) : BluetoothRepository {
         }
     }
 
-    // CLEANUP
+    // NOUVEAU : Méthode pour envoyer la commande unlock
+    override suspend fun unlockScooter(): Result<Unit> {
+        return try {
+            Log.d(TAG, "🔓 Unlocking scooter...")
+            connector?.sendUnlockCommand()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Unlock error: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
     override fun cleanup() {
         scanner?.cleanup()
         connector?.disconnect()
     }
 
-    // UTILITAIRES
     override fun isBluetoothEnabled(): Boolean = bluetoothAdapter?.isEnabled == true
     override fun hasNecessaryPermissions(): Boolean = true
     override fun clearDiscoveredDevices() {
         discoveredDevices.value = emptyList()
     }
 
-    // STUBS
     override suspend fun sendCommand(command: ByteArray): Result<Unit> = Result.success(Unit)
-    override suspend fun unlockScooter(): Result<Unit> = Result.success(Unit)
 }
