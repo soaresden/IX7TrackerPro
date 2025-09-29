@@ -1,14 +1,10 @@
 package com.ix7.tracker.bluetooth
 
+import android.bluetooth.BluetoothDevice
 import com.ix7.tracker.core.*
 import kotlinx.coroutines.flow.StateFlow
 
-/**
- * Interface pour la gestion Bluetooth (Repository Pattern)
- * Permet de découpler la logique métier de l'implémentation Android
- */
 interface BluetoothRepository {
-
     // États observables
     val discoveredDevices: StateFlow<List<BluetoothDeviceInfo>>
     val connectionState: StateFlow<ConnectionState>
@@ -30,4 +26,8 @@ interface BluetoothRepository {
     fun isBluetoothEnabled(): Boolean
     fun hasNecessaryPermissions(): Boolean
     fun clearDiscoveredDevices()
+
+    // Nouvelle méthode pour la connexion directe
+    suspend fun connect(device: BluetoothDevice): Result<Unit>
+    suspend fun unlockScooter(): Result<Unit>
 }

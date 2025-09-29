@@ -16,17 +16,14 @@ class BluetoothDataHandler(
     fun handleData(data: ByteArray) {
         frameNumber++
 
-        // LOG BRUT - Ne rien parser, juste tout afficher
+        // LOG BRUT
         val hex = data.joinToString(" ") { "%02X".format(it) }
-        val dec = data.joinToString(" ") { "${it.toInt() and 0xFF}" }
 
-        Log.d(TAG, "═══════════════════════════════════════════════════════════")
-        Log.d(TAG, "FRAME #$frameNumber - Taille: ${data.size} bytes")
-        Log.d(TAG, "HEX: $hex")
-        Log.d(TAG, "DEC: $dec")
-        Log.d(TAG, "═══════════════════════════════════════════════════════════")
+        Log.d(TAG, "════════════════════════════════════════════════")
+        Log.d(TAG, "FRAME #$frameNumber [${data.size} bytes]: $hex")
+        Log.d(TAG, "════════════════════════════════════════════════")
 
-        // Toujours mettre à jour avec des données vides pour garder la connexion active
+        // Toujours mettre à jour
         onDataUpdate(ScooterData(isConnected = true, lastUpdate = Date()))
     }
 }

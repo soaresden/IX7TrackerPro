@@ -59,16 +59,17 @@
         </activity>
 
 
-        <!-- NOUVELLE ACTIVITÉ DE SPLASH - Point d'entrée principal -->
-        <activity
-            android:name=".ui.SplashActivity"
-            android:exported="true"
-            android:theme="@style/Theme.IX7Tracker">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+<!--        &lt;!&ndash; NOUVELLE ACTIVITÉ DE SPLASH - Point d'entrée principal &ndash;&gt;-->
+<!--        <activity-->
+<!--            android:name=".ui.SplashActivity"-->
+<!--            android:exported="true"-->
+<!--            android:theme="@style/Theme.IX7Tracker">-->
+<!--            <intent-filter>-->
+<!--                <action android:name="android.intent.action.MAIN" />-->
+<!--                <category android:name="android.intent.category.LAUNCHER" />-->
+<!--            </intent-filter>-->
+<!--        </activity>-->
+
         <!-- Déclaration du service Bluetooth (si nécessaire) -->
         <!--
         <service
