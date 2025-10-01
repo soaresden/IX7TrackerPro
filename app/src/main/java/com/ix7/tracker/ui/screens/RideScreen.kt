@@ -1,4 +1,3 @@
-// RideScreen.kt - Version compacte et complète
 package com.ix7.tracker.ui.screens
 
 import androidx.compose.foundation.Canvas
@@ -15,15 +14,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.*
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ix7.tracker.core.ScooterData
-import com.ix7.tracker.ui.components.ride.*
+import com.ix7.tracker.core.TemperatureThresholds
 import kotlin.math.*
 
 enum class RideMode(val emoji: String, val label: String) {
@@ -87,6 +84,7 @@ fun RideScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(Color(0xFF1C1C1E))
             .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -119,7 +117,10 @@ fun RideScreen(
         }
 
         // 2. Mode de conduite compact
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF2C2C2E))
+        ) {
             Column(modifier = Modifier.padding(8.dp)) {
                 // Ligne 1: Type véhicule et contrôles
                 Row(
@@ -138,7 +139,7 @@ fun RideScreen(
                             Text(wheelMode.emoji, fontSize = 16.sp)
                         }
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(wheelMode.label, fontSize = 12.sp)
+                        Text(wheelMode.label, fontSize = 12.sp, color = Color.White)
                     }
 
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -147,63 +148,50 @@ fun RideScreen(
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (isDebridged) Color.Red else Color.Gray
                             ),
-                            modifier = Modifier.height(32.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                            modifier = Modifier.size(40.dp),
+                            contentPadding = PaddingValues(0.dp)
                         ) {
-                            Text(if (isDebridged) "Débridé" else "Bridé", fontSize = 10.sp)
+                            Text("⚡", fontSize = 16.sp)
                         }
 
                         Button(
-                            onClick = {
-                                speedUnit = if (speedUnit == SpeedUnit.KMH) SpeedUnit.MPH else SpeedUnit.KMH
-                            },
-                            modifier = Modifier.height(32.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                            onClick = { showActionsPopup = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue),
+                            modifier = Modifier.size(40.dp),
+                            contentPadding = PaddingValues(0.dp)
                         ) {
-                            Text(speedUnit.name, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text("⚙️", fontSize = 16.sp)
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
-                // Ligne 2: Modes uniformes
+                // Ligne 2: Modes de vitesse
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     RideMode.values().forEach { mode ->
-                        val maxSpeedForMode = when (mode) {
-                            RideMode.PEDESTRIAN -> speedLimits.pedestrian
-                            RideMode.ECO -> speedLimits.eco
-                            RideMode.RACE -> speedLimits.race
-                            RideMode.POWER -> speedLimits.power
-                        }
-
-                        val displaySpeed = if (speedUnit == SpeedUnit.MPH) {
-                            (maxSpeedForMode * 0.621371).toInt()
-                        } else {
-                            maxSpeedForMode
-                        }
-
                         Button(
                             onClick = { rideMode = mode },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(50.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (rideMode == mode)
-                                    MaterialTheme.colorScheme.primary else
-                                    MaterialTheme.colorScheme.surface
-                            )
+                                containerColor = if (rideMode == mode) Color.Blue else Color.DarkGray
+                            ),
+                            modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
+                            contentPadding = PaddingValues(4.dp)
                         ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(mode.emoji, fontSize = 14.sp)
-                                Text(mode.label, fontSize = 8.sp, maxLines = 1)
-                                Text("$displaySpeed", fontSize = 8.sp, color = Color.Gray)
+                                Text(
+                                    when (mode) {
+                                        RideMode.PEDESTRIAN -> "${speedLimits.pedestrian}"
+                                        RideMode.ECO -> "${speedLimits.eco}"
+                                        RideMode.RACE -> "${speedLimits.race}"
+                                        RideMode.POWER -> "${speedLimits.power}"
+                                    },
+                                    fontSize = 10.sp
+                                )
                             }
                         }
                     }
@@ -211,17 +199,7 @@ fun RideScreen(
             }
         }
 
-        // 3. Graphique compact
-        Card(modifier = Modifier.fillMaxWidth().height(100.dp)) {
-            RealTimeSpeedGraph(
-                isRiding = isRiding,
-                currentSpeed = if (isConnected) currentSpeed else 0f,
-                currentBattery = if (isConnected) scooterData.battery else 0f,
-                maxSpeed = displayMaxSpeed.toFloat()
-            )
-        }
-
-        // 4. Clignotants
+        // 3. Clignotants et warnings
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
@@ -229,41 +207,59 @@ fun RideScreen(
             Button(
                 onClick = {
                     leftTurn = !leftTurn
-                    if (leftTurn) { rightTurn = false; warningLights = false }
+                    if (leftTurn) rightTurn = false
                 },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (leftTurn) Color(0xFFFFB300) else Color.Gray
+                    containerColor = if (leftTurn) Color(0xFFFF9500) else Color.DarkGray
                 ),
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
             ) {
-                Text("◀", fontSize = 16.sp, color = Color.White)
+                Text("⬅️", fontSize = 20.sp)
             }
 
             Button(
                 onClick = {
                     warningLights = !warningLights
-                    if (warningLights) { leftTurn = false; rightTurn = false }
+                    if (warningLights) {
+                        leftTurn = false
+                        rightTurn = false
+                    }
                 },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (warningLights) Color.Red else Color.Gray
+                    containerColor = if (warningLights) Color.Red else Color.DarkGray
                 ),
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
             ) {
-                Text("⚠", fontSize = 16.sp)
+                Text("⚠️", fontSize = 20.sp)
             }
 
             Button(
                 onClick = {
                     rightTurn = !rightTurn
-                    if (rightTurn) { leftTurn = false; warningLights = false }
+                    if (rightTurn) leftTurn = false
                 },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (rightTurn) Color(0xFFFFB300) else Color.Gray
+                    containerColor = if (rightTurn) Color(0xFFFF9500) else Color.DarkGray
                 ),
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
             ) {
-                Text("▶", fontSize = 16.sp, color = Color.White)
+                Text("➡️", fontSize = 20.sp)
             }
+        }
+
+        // 4. Graphique temps réel
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(120.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF2C2C2E))
+        ) {
+            RealTimeGraph(
+                isRiding = isRiding,
+                currentSpeed = currentSpeed,
+                currentBattery = scooterData.battery,
+                maxSpeed = displayMaxSpeed.toFloat()
+            )
         }
 
         // 5. Contrôles de trajet
@@ -274,30 +270,36 @@ fun RideScreen(
             Button(
                 onClick = { isRiding = true; isPaused = false },
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Green),
-                enabled = !isRiding || isPaused
+                enabled = !isRiding || isPaused,
+                modifier = Modifier.weight(1f).padding(horizontal = 2.dp)
             ) {
-                Text("▶", fontSize = 16.sp)
+                Text("▶", fontSize = 20.sp)
             }
 
             Button(
                 onClick = { isPaused = !isPaused },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9500)),
-                enabled = isRiding
+                enabled = isRiding,
+                modifier = Modifier.weight(1f).padding(horizontal = 2.dp)
             ) {
-                Text(if (isPaused) "▶" else "⏸", fontSize = 16.sp)
+                Text(if (isPaused) "▶" else "⏸", fontSize = 20.sp)
             }
 
             Button(
                 onClick = { isRiding = false; isPaused = false },
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
-                enabled = isRiding
+                enabled = isRiding,
+                modifier = Modifier.weight(1f).padding(horizontal = 2.dp)
             ) {
-                Text("⏹", fontSize = 16.sp)
+                Text("⏹", fontSize = 20.sp)
             }
         }
 
-        // 6. Données compactes
-        Card(modifier = Modifier.fillMaxWidth()) {
+        // 6. Données compactes AVEC VOYANT TEMPÉRATURE
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF2C2C2E))
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -305,118 +307,81 @@ fun RideScreen(
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 DataItem("Batterie", "${scooterData.battery.toInt()}%")
-                DataItem("Voltage", "${scooterData.voltage}V")
-                DataItem("Odomètre", "${scooterData.odometer}km")
-                DataItem("Temp", "${scooterData.temperature.toInt()}°C")
+                DataItem("Voltage", "%.1fV".format(scooterData.voltage))
+                DataItem("Odomètre", "%.1fkm".format(scooterData.odometer))
+
+                // NOUVEAU: Indicateur température avec alerte
+                TemperatureIndicator(temperature = scooterData.temperature)
             }
         }
 
-        // 7. Actions
-        Button(
-            onClick = { showActionsPopup = true },
-            modifier = Modifier.fillMaxWidth().height(40.dp)
+        // 7. Trip stats
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF2C2C2E))
         ) {
-            Icon(Icons.Default.Settings, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Actions", fontSize = 12.sp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                DataItem("Trajet", "%.1fkm".format(scooterData.tripDistance))
+                DataItem("Temps", scooterData.totalRideTime)
+                DataItem("Puissance", "%.0fW".format(scooterData.power))
+            }
         }
     }
 
-    // Popup des actions
+    // Popup d'actions
     if (showActionsPopup) {
         ActionsPopup(onDismiss = { showActionsPopup = false })
     }
 }
 
+/**
+ * NOUVEAU: Indicateur température avec voyant coloré et alerte
+ */
 @Composable
-fun CompactSpeedometer(
-    speed: Float,
-    maxSpeed: Float,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier.height(140.dp),
-        contentAlignment = Alignment.Center
+private fun TemperatureIndicator(temperature: Float) {
+    val (emoji, color, warning) = when {
+        temperature > TemperatureThresholds.MOTOR_CRITICAL -> Triple("🔥", Color(0xFFF44336), true)
+        temperature > TemperatureThresholds.MOTOR_WARNING -> Triple("🌡️", Color(0xFFFF9800), true)
+        else -> Triple("🌡️", Color(0xFF4CAF50), false)
+    }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable {
+            // TODO: Afficher détails température
+        }
     ) {
-        Canvas(modifier = Modifier.size(120.dp)) {
-            val center = center
-            val radius = size.minDimension / 2 * 0.8f
-
-            // Arc de fond
-            drawArc(
-                color = Color.Gray.copy(alpha = 0.3f),
-                startAngle = 180f,
-                sweepAngle = 180f,
-                useCenter = false,
-                style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round)
-            )
-
-            // Arc de vitesse
-            val speedAngle = (speed / maxSpeed) * 180f
-            drawArc(
-                color = when {
-                    speed < maxSpeed * 0.6f -> Color.Green
-                    speed < maxSpeed * 0.8f -> Color.Yellow
-                    else -> Color.Red
-                },
-                startAngle = 180f,
-                sweepAngle = speedAngle,
-                useCenter = false,
-                style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round)
-            )
-
-            // Graduations
-            for (i in 0..4) {
-                val angle = 180f + (i * 45f)
-                val angleRad = Math.toRadians(angle.toDouble())
-                val startRadius = radius * 0.9f
-                val endRadius = radius
-
-                val startX = center.x + cos(angleRad).toFloat() * startRadius
-                val startY = center.y + sin(angleRad).toFloat() * startRadius
-                val endX = center.x + cos(angleRad).toFloat() * endRadius
-                val endY = center.y + sin(angleRad).toFloat() * endRadius
-
-                drawLine(
-                    color = Color.Gray,
-                    start = androidx.compose.ui.geometry.Offset(startX, startY),
-                    end = androidx.compose.ui.geometry.Offset(endX, endY),
-                    strokeWidth = 2.dp.toPx()
-                )
-            }
-        }
-
-        // Affichage numérique
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.offset(y = 20.dp)
-        ) {
-            Text(
-                text = "${speed.toInt()}",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = when {
-                    speed < maxSpeed * 0.6f -> Color.Green
-                    speed < maxSpeed * 0.8f -> Color.Yellow
-                    else -> Color.Red
-                }
-            )
-            Text(
-                text = "Max: $maxSpeed",
-                fontSize = 10.sp,
-                color = Color.Gray
-            )
-        }
+        Text(
+            text = emoji,
+            fontSize = 20.sp
+        )
+        Text(
+            text = "${temperature.toInt()}°C",
+            fontSize = 14.sp,
+            fontWeight = if (warning) FontWeight.Bold else FontWeight.Normal,
+            color = color
+        )
+        Text(
+            text = "Temp",
+            fontSize = 10.sp,
+            color = Color.Gray
+        )
     }
 }
 
 @Composable
-fun DataItem(label: String, value: String) {
+private fun DataItem(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = value,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
         )
         Text(
             text = label,
@@ -427,7 +392,43 @@ fun DataItem(label: String, value: String) {
 }
 
 @Composable
-fun RealTimeSpeedGraph(
+private fun CompactSpeedometer(
+    speed: Float,
+    maxSpeed: Float,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.fillMaxHeight(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            // Vitesse principale
+            Text(
+                text = "${speed.toInt()}",
+                fontSize = 56.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            // Unité et max
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "km/h",
+                    fontSize = 14.sp,
+                    color = Color.Gray
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "max ${maxSpeed.toInt()}",
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RealTimeGraph(
     isRiding: Boolean,
     currentSpeed: Float,
     currentBattery: Float,
@@ -446,9 +447,7 @@ fun RealTimeSpeedGraph(
         }
     }
 
-    Box(
-        modifier = Modifier.fillMaxSize().padding(8.dp)
-    ) {
+    Box(modifier = Modifier.fillMaxSize().padding(8.dp)) {
         if (speedHistory.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -463,10 +462,10 @@ fun RealTimeSpeedGraph(
                 val pointSpacing = width / speedHistory.size.coerceAtLeast(1)
 
                 // Courbe de vitesse (bleue)
-                val                 speedPath = Path()
+                val speedPath = Path()
                 speedHistory.forEachIndexed { index, speed ->
                     val x = index * pointSpacing
-                    val y = height - (speed / maxSpeed * height)
+                    val y = height - (speed / maxSpeed * height).coerceIn(0f, height)
                     if (index == 0) {
                         speedPath.moveTo(x, y)
                     } else {
@@ -475,8 +474,8 @@ fun RealTimeSpeedGraph(
                 }
                 drawPath(
                     path = speedPath,
-                    color = Color.Blue,
-                    style = Stroke(width = 2.dp.toPx())
+                    color = Color(0xFF2196F3),
+                    style = Stroke(width = 3f)
                 )
 
                 // Courbe de batterie (verte)
@@ -492,8 +491,8 @@ fun RealTimeSpeedGraph(
                 }
                 drawPath(
                     path = batteryPath,
-                    color = Color.Green,
-                    style = Stroke(width = 2.dp.toPx())
+                    color = Color(0xFF4CAF50),
+                    style = Stroke(width = 2f)
                 )
             }
         }
@@ -501,29 +500,29 @@ fun RealTimeSpeedGraph(
 }
 
 @Composable
-fun ActionsPopup(
+private fun ActionsPopup(
     onDismiss: () -> Unit
 ) {
     var headlights by remember { mutableStateOf(false) }
     var neonLights by remember { mutableStateOf(false) }
 
     AlertDialog(
-        onDismissRequest = { /* Ne se ferme pas automatiquement */ },
-        title = { Text("Actions", fontSize = 16.sp) },
+        onDismissRequest = onDismiss,
+        title = { Text("Actions", fontSize = 18.sp, fontWeight = FontWeight.Bold) },
         text = {
             Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Phares avec illustration
+                // Phares
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (headlights) "💡" else "🔦", fontSize = 20.sp)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Phares", fontSize = 14.sp)
+                        Text(if (headlights) "💡" else "🔦", fontSize = 24.sp)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Phares", fontSize = 16.sp)
                     }
                     Switch(
                         checked = headlights,
@@ -531,16 +530,16 @@ fun ActionsPopup(
                     )
                 }
 
-                // Néons avec illustration
+                // Néons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (neonLights) "🌈" else "💫", fontSize = 20.sp)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Néons", fontSize = 14.sp)
+                        Text(if (neonLights) "🌈" else "💫", fontSize = 24.sp)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Néons", fontSize = 16.sp)
                     }
                     Switch(
                         checked = neonLights,
@@ -552,19 +551,19 @@ fun ActionsPopup(
 
                 // Klaxon
                 Button(
-                    onClick = { /* TODO: Klaxon */ },
+                    onClick = { /* TODO: Envoyer commande klaxon */ },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("🔊 Klaxon", fontSize = 14.sp)
+                    Text("🔊 Klaxon", fontSize = 16.sp)
                 }
 
-                // Enregistrement de trajet
+                // Enregistrer trajet
                 Button(
-                    onClick = { /* TODO: Save ride */ },
+                    onClick = { /* TODO: Sauvegarder trajet */ },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
                 ) {
-                    Text("💾 Enregistrer trajet", fontSize = 14.sp)
+                    Text("💾 Enregistrer trajet", fontSize = 16.sp)
                 }
             }
         },

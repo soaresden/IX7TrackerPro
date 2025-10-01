@@ -1,70 +1,31 @@
 package com.ix7.tracker.core
 
-import java.util.*
-
 /**
- * Constantes pour la communication Bluetooth
- */
-object BluetoothConstants {
-
-    // UUIDs standard
-    const val CCCD_UUID = "00002902-0000-1000-8000-00805f9b34fb"
-
-    // Timeouts
-    const val SCAN_TIMEOUT_MS = 30000L
-    const val CONNECTION_TIMEOUT_MS = 10000L
-    const val RECONNECTION_DELAY_MS = 2000L
-
-    // Actions Intent
-    const val ACTION_GATT_CONNECTED = "ACTION_GATT_CONNECTED"
-    const val ACTION_GATT_DISCONNECTED = "ACTION_GATT_DISCONNECTED"
-    const val ACTION_GATT_SERVICES_DISCOVERED = "ACTION_GATT_SERVICES_DISCOVERED"
-    const val ACTION_DATA_AVAILABLE = "ACTION_DATA_AVAILABLE"
-    const val EXTRA_DATA = "EXTRA_DATA"
-
-    // États de connexion
-    const val STATE_DISCONNECTED = 0
-    const val STATE_CONNECTING = 1
-    const val STATE_CONNECTED = 2
-}
-
-/**
- * Constantes pour le protocole des hoverboards
- * CORRIGÉ basé sur l'analyse de l'application officielle (protocole 55 AA)
+ * Constantes du protocole M0Robot - CORRIGÉ
+ * Basé sur l'analyse approfondie des logs et du manuel
  */
 object ProtocolConstants {
 
-    // ===== EN-TÊTES DE TRAMES CORRIGÉS =====
-    // L'application officielle utilise 55 AA (pas 5A A5 !)
+    // ===== HEADERS DE TRAME =====
     const val FRAME_HEADER_1 = 0x55.toByte()  // Premier byte: 0x55
     const val FRAME_HEADER_2 = 0xAA.toByte()  // Second byte: 0xAA
 
-    // Ancien headers (INCORRECTS pour ce modèle)
-    // const val FRAME_HEADER_MAIN = 0x5A.toByte() // ← FAUX
-    // const val FRAME_HEADER_EXTENDED = 0xA5.toByte() // ← FAUX
-
-    // Tailles de trames observées dans les logs
-    const val MIN_FRAME_SIZE = 5        // Minimum observé
-    const val MAX_FRAME_SIZE = 60       // Maximum observé (jusqu'à 60 bytes)
+    // ===== TAILLES DE TRAMES =====
+    const val MIN_FRAME_SIZE = 5        // Minimum: 55 AA length cmd checksum
+    const val MAX_FRAME_SIZE = 100      // Maximum observé (avec marge)
     const val SHORT_FRAME_SIZE = 10     // Trame courte typique
-    const val LONG_FRAME_SIZE = 60      // Trame longue avec padding
+    const val MEDIUM_FRAME_SIZE = 20    // Trame moyenne
+    const val LONG_FRAME_SIZE = 60      // Trame longue complète (ODOMÈTRE ICI)
 
-    // Types de commandes observés
-    const val CMD_REQUEST_DATA = 0x22.toByte()      // Demande données
+    // ===== COMMANDES =====
+    const val CMD_REQUEST_DATA = 0x22.toByte()      // Demande données (commande principale)
     const val CMD_STATUS = 0x20.toByte()            // Demande statut
     const val CMD_SET_PARAMETER = 0x02.toByte()     // Modifier paramètre
     const val CMD_KEEP_ALIVE = 0x00.toByte()        // Keep-alive
     const val CMD_GET_VERSION = 0x03.toByte()       // Version firmware
 
     // ===== STRUCTURE DES TRAMES =====
-    // Basé sur l'analyse des logs:
-    // Offset 0-1: Header (55 AA)
-    // Offset 2: Length
-    // Offset 3: Command
-    // Offset 4: SubCommand
-    // Offset 5+: Data
-    // Offset N-1: Checksum
-
+    // Format: 55 AA [length] [command] [subcommand] [data...] [checksum]
     const val OFFSET_HEADER_1 = 0
     const val OFFSET_HEADER_2 = 1
     const val OFFSET_LENGTH = 2
@@ -72,27 +33,77 @@ object ProtocolConstants {
     const val OFFSET_SUBCOMMAND = 4
     const val OFFSET_DATA_START = 5
 
-    // Offsets dans les trames de données (à ajuster selon tests réels)
-    const val OFFSET_SPEED = 6
-    const val OFFSET_BATTERY = 8
-    const val OFFSET_VOLTAGE = 10
-    const val OFFSET_CURRENT = 12
-    const val OFFSET_TEMPERATURE = 14
-    const val OFFSET_ERROR_CODES = 16
-    const val OFFSET_WARNING_CODES = 18
+    // ===== OFFSETS DANS LES TRAMES LONGUES (60 bytes) =====
+    // Ces offsets sont CONFIRMÉS par l'analyse des logs
+    const val OFFSET_TEMPERATURE = 5        // Température moteur en °C (byte unique)
+    const val OFFSET_BATTERY = 22           // Batterie en % (byte unique)
+
+    // Ces offsets sont À CONFIRMER lors des tests
+    const val OFFSET_SPEED_START = 6        // Vitesse (2 bytes, little-endian, en cm/s)
+    const val OFFSET_VOLTAGE_START = 14     // Voltage (2 bytes, little-endian, en dixièmes de volt)
+    const val OFFSET_CURRENT_START = 16     // Courant (2 bytes, peut être signé)
+
+    // ODOMÈTRE: Position à détecter dynamiquement (recherche 356km = 35600)
+    // Généralement entre offsets 24 et 40 (4 bytes, little-endian, en décamètres)
+    const val OFFSET_ODOMETER_SEARCH_START = 24
+    const val OFFSET_ODOMETER_SEARCH_END = 45
+
+    // TEMPS TOTAL: Position à détecter (recherche ~10898 minutes)
+    const val OFFSET_TIME_SEARCH_START = 30
+    const val OFFSET_TIME_SEARCH_END = 50
 
     // ===== VALEURS OBSERVÉES =====
-    // Ces valeurs ont été observées dans les logs de l'app officielle
-    const val RESPONSE_ID1 = 0x7E.toByte()  // Identifiant SET4_ID1
-    const val RESPONSE_ID2 = 0x03.toByte()  // Identifiant SET4_ID2
+    const val RESPONSE_ID1 = 0x7E.toByte()  // Identifiant dans réponses courtes
+    const val RESPONSE_ID2 = 0x03.toByte()  // Second identifiant
+}
 
-    // Mode types observés
-    const val MODE_TYPE_2 = 2  // Type:2 typeLow:2 typeHide:0
+/**
+ * Seuils de température - BASÉ SUR LE MANUEL
+ * Manuel page 7: E55 = Controller high temperature alarm
+ */
+object TemperatureThresholds {
+    // Température moteur/contrôleur
+    const val MOTOR_NORMAL = 50f        // °C - Température normale max
+    const val MOTOR_WARNING = 60f       // °C - Seuil d'avertissement (voyant orange)
+    const val MOTOR_CRITICAL = 70f      // °C - Seuil critique (voyant rouge + alerte sonore)
+    const val MOTOR_SHUTDOWN = 80f      // °C - Arrêt automatique probable
+
+    // Température batterie
+    const val BATTERY_NORMAL = 40f      // °C - Température batterie normale max
+    const val BATTERY_WARNING = 45f     // °C - Seuil d'avertissement batterie
+    const val BATTERY_CRITICAL = 55f    // °C - Seuil critique batterie (E58)
+    const val BATTERY_SHUTDOWN = 65f    // °C - Arrêt automatique
+}
+
+/**
+ * Limites de sécurité
+ */
+object SafetyLimits {
+    // Vitesse
+    const val MAX_SPEED_KMH = 50f       // Vitesse max réaliste
+    const val MIN_SPEED_KMH = 0f
+
+    // Batterie
+    const val MAX_BATTERY_PERCENT = 100f
+    const val MIN_BATTERY_PERCENT = 0f
+    const val LOW_BATTERY_THRESHOLD = 20f
+    const val CRITICAL_BATTERY_THRESHOLD = 10f
+
+    // Voltage (pour hoverboard 36V nominal)
+    const val NOMINAL_VOLTAGE = 36f
+    const val MAX_VOLTAGE = 42f         // Batterie pleine
+    const val MIN_VOLTAGE = 30f         // Batterie vide
+    const val CRITICAL_VOLTAGE = 32f    // Seuil critique
+
+    // Courant
+    const val MAX_CURRENT_AMPS = 20f    // Courant max en charge
+
+    // Odomètre
+    const val MAX_ODOMETER_KM = 100000f // Limite réaliste
 }
 
 /**
  * Préfixes des noms de scooters supportés
- * Note: Le hoverboard testé semble utiliser "Loby Balance Car" dans l'app officielle
  */
 object ScooterPrefixes {
     val SUPPORTED_PREFIXES = listOf(
@@ -111,122 +122,104 @@ object ScooterPrefixes {
      * Vérifie si un nom de device correspond aux préfixes supportés
      */
     fun isSupported(deviceName: String?): Boolean {
-        if (deviceName.isNullOrBlank()) return false
-        return SUPPORTED_PREFIXES.any { prefix ->
-            deviceName.contains(prefix, ignoreCase = true)
+        if (deviceName == null) return false
+        return SUPPORTED_PREFIXES.any { deviceName.startsWith(it, ignoreCase = true) }
+    }
+
+    /**
+     * Détecte le type de scooter
+     */
+    fun detectType(deviceName: String?): ScooterType {
+        if (deviceName == null) return ScooterType.UNKNOWN
+
+        return when {
+            deviceName.startsWith("M0", ignoreCase = true) -> ScooterType.M0ROBOT
+            deviceName.contains("Loby", ignoreCase = true) -> ScooterType.HOVERBOARD
+            deviceName.contains("Balance", ignoreCase = true) -> ScooterType.HOVERBOARD
+            deviceName.startsWith("M1", ignoreCase = true) -> ScooterType.SCOOTER_M1
+            deviceName.startsWith("X", ignoreCase = true) -> ScooterType.SCOOTER_X_SERIES
+            else -> ScooterType.GENERIC
         }
     }
 }
 
 /**
- * Types de scooters supportés avec leurs UUIDs
- * CORRIGÉ: Le type FFE0/FFE1 est le bon pour le hoverboard testé
+ * Types de scooters supportés
  */
-enum class ScooterType(
-    val uuid_service: String,
-    val uuid_notify: String,
-    val uuid_write: String,
-    val description: String
-) {
-    // ===== TYPE PRINCIPAL (HOVERBOARD TESTÉ) =====
-    TYPE_FFE0(
-        "0000ffe0-0000-1000-8000-00805f9b34fb",
-        "0000ffe1-0000-1000-8000-00805f9b34fb",
-        "0000ffe1-0000-1000-8000-00805f9b34fb",
-        "Hoverboard standard (FFE0/FFE1) - Protocole 55 AA"
-    ),
-
-    // Autres types (pour référence, non testés)
-    TYPE_NORDIC(
-        "6e400001-b5a3-f393-e0a9-e50e24dcca9e",
-        "6e400002-b5a3-f393-e0a9-e50e24dcca9e",
-        "6e400003-b5a3-f393-e0a9-e50e24dcca9e",
-        "Type Nordic UART"
-    ),
-
-    TYPE_AE00(
-        "0000ae00-0000-1000-8000-00805f9b34fb",
-        "0000ae01-0000-1000-8000-00805f9b34fb",
-        "0000ae02-0000-1000-8000-00805f9b34fb",
-        "Type AE00"
-    ),
-
-    TYPE_FFF0(
-        "0000fff0-0000-1000-8000-00805f9b34fb",
-        "0000fff3-0000-1000-8000-00805f9b34fb",
-        "0000fff7-0000-1000-8000-00805f9b34fb",
-        "Type FFF0"
-    ),
-
-    UNKNOWN("", "", "", "Inconnu")
+// Dans ScooterType enum
+enum class ScooterType(val description: String) {
+    UNKNOWN("Appareil inconnu"),
+    M0ROBOT("M0Robot Scooter"),
+    HOVERBOARD("Hoverboard/Balance Car"),
+    SCOOTER_M1("Scooter M1"),
+    SCOOTER_X_SERIES("Scooter Série X"),
+    GENERIC("Scooter générique"),
+    TYPE_NORDIC("Nordic UART (6E40)"),
+    TYPE_AE00("Type AE00"),
+    TYPE_FFF0("Type FFF0"),
+    TYPE_FFE0("Type FFE0/FFE1 - Protocole 55 AA")
 }
 
 /**
- * Exemples de commandes pour tests
+ * Codes d'erreur du manuel (page 7)
  */
-object TestCommands {
-    // Commandes observées dans les logs
-    val REQUEST_DATA = byteArrayOf(
-        0x55.toByte(), 0xAA.toByte(),  // Header
-        0x03.toByte(),                  // Length
-        0x22.toByte(),                  // Command
-        0x01.toByte(),                  // SubCommand
-        0x00.toByte(),                  // Data
-        0x26.toByte()                   // Checksum
-    )
+object ErrorCodes {
+    const val E53_OVERVOLTAGE = 0x53            // Over-voltage alarm
+    const val E54_UNDERVOLTAGE = 0x54           // Under-voltage alarm
+    const val E55_CONTROLLER_TEMP = 0x55        // Controller high temperature
+    const val E56_SHORT_CIRCUIT = 0x56          // Short circuit protection
+    const val E57_BRAKE_HANDLE = 0x57           // Brake handle malfunction
+    const val E58_BATTERY_TEMP = 0x58           // Battery high temperature
+    const val E59_MOTOR_FAULT = 0x59            // Motor malfunction
 
-    val REQUEST_STATUS = byteArrayOf(
-        0x55.toByte(), 0xAA.toByte(),  // Header
-        0x02.toByte(),                  // Length
-        0x20.toByte(),                  // Command
-        0x22.toByte()                   // Checksum
-    )
-
-    val KEEP_ALIVE = byteArrayOf(
-        0x55.toByte(), 0xAA.toByte(),  // Header
-        0x01.toByte(),                  // Length
-        0x00.toByte(),                  // Command
-        0x56.toByte()                   // Checksum
-    )
-}
-
-/**
- * Utilitaires pour le protocole
- */
-object ProtocolUtils {
     /**
-     * Calcule le checksum XOR (basé sur les logs: "XOR=0")
+     * Retourne le message d'erreur lisible
      */
-    fun calculateChecksum(data: ByteArray, startIndex: Int = 2, endIndex: Int = data.size - 1): Byte {
-        var xor: Byte = 0
-        for (i in startIndex until endIndex) {
-            xor = (xor.toInt() xor data[i].toInt()).toByte()
+    fun getMessage(code: Int): String {
+        return when (code) {
+            E53_OVERVOLTAGE -> "Surtension détectée"
+            E54_UNDERVOLTAGE -> "Sous-tension détectée"
+            E55_CONTROLLER_TEMP -> "Contrôleur en surchauffe"
+            E56_SHORT_CIRCUIT -> "Court-circuit détecté"
+            E57_BRAKE_HANDLE -> "Dysfonctionnement frein"
+            E58_BATTERY_TEMP -> "Batterie en surchauffe"
+            E59_MOTOR_FAULT -> "Dysfonctionnement moteur"
+            else -> "Erreur inconnue: $code"
         }
-        return xor
+    }
+}
+
+/**
+ * Utilitaires pour les calculs
+ */
+object ConversionUtils {
+    /**
+     * Convertit vitesse de cm/s en km/h
+     */
+    fun cmPerSecToKmPerHour(cmPerSec: Int): Float {
+        return cmPerSec / 100f * 3.6f
     }
 
     /**
-     * Vérifie si une trame a le bon header 55 AA
+     * Convertit décamètres en kilomètres
      */
-    fun isValidFrame(data: ByteArray): Boolean {
-        return data.size >= 3 &&
-                data[0] == ProtocolConstants.FRAME_HEADER_1 &&
-                data[1] == ProtocolConstants.FRAME_HEADER_2
+    fun decametersToKilometers(decameters: Int): Float {
+        return decameters / 100f
     }
 
     /**
-     * Construit une commande avec header et checksum
+     * Convertit dixièmes de volt en volts
      */
-    fun buildCommand(command: Byte, subCommand: Byte, payload: ByteArray = byteArrayOf()): ByteArray {
-        val length = (1 + payload.size).toByte() // command + payload
-        val frame = byteArrayOf(
-            ProtocolConstants.FRAME_HEADER_1,
-            ProtocolConstants.FRAME_HEADER_2,
-            length,
-            command
-        ) + payload
+    fun decivoltsToVolts(decivolts: Int): Float {
+        return decivolts / 10f
+    }
 
-        val checksum = calculateChecksum(frame)
-        return frame + checksum
+    /**
+     * Convertit minutes en format "XH YM ZS"
+     */
+    fun minutesToTimeString(totalMinutes: Int): String {
+        val hours = totalMinutes / 60
+        val minutes = totalMinutes % 60
+        return "${hours}H ${minutes}M 0S"
     }
 }
