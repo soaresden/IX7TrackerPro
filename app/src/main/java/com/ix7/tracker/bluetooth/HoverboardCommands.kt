@@ -1,4 +1,25 @@
 package com.ix7.tracker.bluetooth
 
-class HoverboardCommands {
+object HoverboardCommands {
+    // Commandes identifiées par reverse-engineering
+    val TOGGLE_A = byteArrayOf(
+        0x61, 0x9E.toByte(), 0x37, 0x14, 0x55,
+        0xDA.toByte(), 0x38, 0xB5.toByte(), 0xCA.toByte()
+    )
+
+    val TOGGLE_B = byteArrayOf(
+        0x61, 0x9E.toByte(), 0x37, 0x14, 0x55,
+        0x4F, 0x3E, 0xC2.toByte(), 0xCA.toByte()
+    )
+
+    val COMMAND_C = byteArrayOf(
+        0x61, 0x9E.toByte(), 0x37, 0x14, 0x55,
+        0x72, 0x06, 0x37, 0xCB.toByte()
+    )
+
+    // Keep-alive utilisé pour le polling
+    val KEEP_ALIVE = byteArrayOf(
+        0x61, 0x9E.toByte(), 0x37, 0x14, 0x55,
+        0xDE.toByte(), 0x3C, 0xBD.toByte(), 0xCA.toByte()
+    )
 }

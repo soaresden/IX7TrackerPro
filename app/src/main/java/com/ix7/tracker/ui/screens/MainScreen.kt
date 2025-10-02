@@ -48,6 +48,13 @@ fun MainScreen(
                 selected = selectedTab == 3,
                 onClick = { selectedTab = 3 }
             )
+
+            NavigationBarItem(
+                icon = { Text("🧪") },
+                label = { Text("Test") },
+                selected = selectedTab == 4,
+                onClick = { selectedTab = 4 }
+            )
         }
 
         Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -56,6 +63,7 @@ fun MainScreen(
                 1 -> CompactDataScreen(scooterData, connectionState == ConnectionState.CONNECTED)
                 2 -> RideScreen(scooterData, connectionState == ConnectionState.CONNECTED)
                 3 -> LogScreen(logManager)
+                4 -> TestScreen(bluetoothManager, connectionState == ConnectionState.CONNECTED)
             }
         }
     }

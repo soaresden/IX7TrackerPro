@@ -63,7 +63,7 @@ object ProtocolUtils {
      * Format: 55 AA 02 20 22
      */
     fun buildStatusRequest(): ByteArray {
-        return buildCommand(ProtocolConstants.CMD_STATUS)
+        return byteArrayOf(0xAA.toByte(), 0x55.toByte()) // Protocole inversé simple
     }
 
     /**
