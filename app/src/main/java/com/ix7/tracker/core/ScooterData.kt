@@ -20,6 +20,11 @@ data class ScooterData(
     val neonOn: Boolean = false,
     val currentMode: RideMode = RideMode.ECO,
     val isLocked: Boolean = false,
+    val leftBlinker: Boolean = false,
+    val rightBlinker: Boolean = false,
+    val isUnlocked: Boolean = false,  // Mode débridé
+    val cruiseControl: Boolean = false,  // Régulateur
+    val zeroStart: Boolean = false,  // Démarrage à zéro
 
     // Anciens champs (compatibilité)
     val lastUpdate: Date = Date(),

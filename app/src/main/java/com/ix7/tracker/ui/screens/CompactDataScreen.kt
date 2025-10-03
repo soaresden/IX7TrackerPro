@@ -10,8 +10,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ix7.tracker.core.ConnectionState
 import com.ix7.tracker.core.ScooterData
+
 
 @Composable
 fun CompactDataScreen(
@@ -28,14 +28,106 @@ fun CompactDataScreen(
             color = if (isConnected) Color(0xFF4CAF50) else Color(0xFFF44336)
         )
 
+
+        // Tableau de bord LCD
+        DashboardDisplay(
+            scooterData = scooterData,
+            modifier = Modifier.padding(horizontal = 8.dp)
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+// États et indicateurs
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Phares
+                StateIndicator(
+                    label = "Phares",
+                    isActive = scooterData.headlightsOn,
+                    activeIcon = "💡",
+                    inactiveIcon = "⚫"
+                )
+
+                // Néon
+                StateIndicator(
+                    label = "Néon",
+                    isActive = scooterData.neonOn,
+                    activeIcon = "🟣",
+                    inactiveIcon = "⚫"
+                )
+
+                // Clignotant gauche
+                StateIndicator(
+                    label = "Cligno G",
+                    isActive = scooterData.leftBlinker,
+                    activeIcon = "⬅️",
+                    inactiveIcon = "⚫"
+                )
+
+                // Clignotant droit
+                StateIndicator(
+                    label = "Cligno D",
+                    isActive = scooterData.rightBlinker,
+                    activeIcon = "➡️",
+                    inactiveIcon = "⚫"
+                )
+            }
+
+            Divider(modifier = Modifier.padding(vertical = 4.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Mode roues (TODO: détecter 2WD)
+                StateIndicator(
+                    label = "Mode",
+                    isActive = false, // TODO: déterminer si 2WD
+                    activeIcon = "🏍️",
+                    inactiveIcon = "🛴"
+                )
+
+                // Régulateur
+                StateIndicator(
+                    label = "Régulateur",
+                    isActive = scooterData.cruiseControl,
+                    activeIcon = "👮",
+                    inactiveIcon = "✖️"
+                )
+
+                // Démarrage zéro
+                StateIndicator(
+                    label = "Start",
+                    isActive = scooterData.zeroStart,
+                    activeIcon = "🐇",
+                    inactiveIcon = "🐢"
+                )
+            }
+        }
+
+
+        Spacer(modifier = Modifier.height(8.dp))
         // Section principale - Données temps réel (2x2)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            DataCard("🏃 Vitesse", "${if (isConnected) scooterData.speed.toInt() else 0} km/h", Color(0xFF2196F3), Modifier.weight(1f))
-            DataCard("🔋 Batterie", "${if (isConnected) scooterData.battery.toInt() else 0}%", getBatteryColor(if (isConnected) scooterData.battery else 0f), Modifier.weight(1f))
-        }
+        ) {}
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -59,7 +151,6 @@ fun CompactDataScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            DataCard("🛣️ Total", "${if (isConnected) scooterData.odometer else 0}km", Color(0xFF9C27B0), Modifier.weight(1f))
             DataCard("📍 Trajet", "${if (isConnected) scooterData.tripDistance else 0}km", Color(0xFF795548), Modifier.weight(1f))
         }
 
@@ -152,11 +243,35 @@ private fun getBatteryColor(battery: Float): Color {
         else -> Color(0xFFF44336)
     }
 }
-
+// Fonction helper
+@Composable
+private fun StateIndicator(
+    label: String,
+    isActive: Boolean,
+    activeIcon: String,
+    inactiveIcon: String
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = if (isActive) activeIcon else inactiveIcon,
+            fontSize = 24.sp
+        )
+        Text(
+            text = label,
+            fontSize = 9.sp,
+            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+            color = if (isActive) MaterialTheme.colorScheme.primary else Color.Gray
+        )
+    }
+}
 private fun getTemperatureColor(temperature: Float): Color {
     return when {
         temperature > 60f -> Color(0xFFF44336)
         temperature > 45f -> Color(0xFFFF9800)
         else -> Color(0xFF4CAF50)
     }
+
+
 }

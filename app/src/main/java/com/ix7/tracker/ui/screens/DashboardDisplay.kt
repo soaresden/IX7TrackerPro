@@ -1,4 +1,4 @@
-package com.ix7.tracker.ui.components
+package com.ix7.tracker.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -13,7 +13,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ix7.tracker.core.ScooterData
-import com.ix7.tracker.ui.screens.RideMode
 
 @Composable
 fun DashboardDisplay(
@@ -26,10 +25,10 @@ fun DashboardDisplay(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(200.dp)  // AJOUTE CETTE LIGNE
-            .background(Color.Red)  // CHANGE EN ROUGE VIF
+            .height(140.dp)  // Réduit de 200 à 140
+            .background(lcdBg)
             .border(2.dp, lcdBlue)
-            .padding(16.dp)
+            .padding(12.dp)  // Réduit aussi le padding
     ) {
         Column {
             // Ligne du haut: Mode + Vitesse + Drive mode
@@ -47,7 +46,7 @@ fun DashboardDisplay(
                         RideMode.POWER -> "POWER"
                     },
                     color = lcdBlue,
-                    fontSize = 18.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace
                 )
@@ -57,59 +56,73 @@ fun DashboardDisplay(
                     Text(
                         text = String.format("%02d", scooterData.speed.toInt()),
                         color = lcdBlue,
-                        fontSize = 48.sp,
+                        fontSize = 40.sp,  // Réduit de 48 à 40
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
-                        letterSpacing = 8.sp
+                        letterSpacing = 6.sp
                     )
                     Text(
                         text = "KPH",
                         color = lcdBlue,
-                        fontSize = 14.sp,
+                        fontSize = 12.sp,
                         fontFamily = FontFamily.Monospace
                     )
                 }
 
                 // Mode roues à droite
                 Text(
-                    text = "1WD", // TODO: détecter 2WD
+                    text = "1WD",
                     color = lcdBlue,
-                    fontSize = 18.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Ligne du bas: ODO
+            // Ligne du bas: ODO + Batterie
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Start,
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "ODO",
-                    color = lcdBlue,
-                    fontSize = 14.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = String.format("%05d", scooterData.odometer.toInt()),
-                    color = lcdBlue,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 4.sp
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "KM",
-                    color = lcdBlue,
-                    fontSize = 14.sp,
-                    fontFamily = FontFamily.Monospace
-                )
+                // ODO à gauche
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "ODO",
+                        color = lcdBlue,
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = String.format("%05d", scooterData.odometer.toInt()),
+                        color = lcdBlue,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 2.sp
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "KM",
+                        color = lcdBlue,
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+
+                // Batterie à droite
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = String.format("%d%%", scooterData.battery.toInt()),
+                        color = lcdBlue,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
             }
         }
     }
