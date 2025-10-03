@@ -42,9 +42,11 @@ class BluetoothManagerImpl(
         Log.d(TAG, "Données mises à jour: ${data.speed} km/h, ${data.battery}%")
     }
 
-    private val connector = BluetoothConnector(context) { state ->
-        _connectionState.value = state
-    }
+    private val connector = BluetoothConnector(
+        context = context,
+        onStateChange = { state -> _connectionState.value = state },
+        onDataDecoded = { data -> dataHandler.handleData(data) }
+    )
 
     // Scan
     override suspend fun startScan(): Result<Unit> {
@@ -74,6 +76,7 @@ class BluetoothManagerImpl(
             dataHandler.handleData(data)
         }
     }
+
 
     override suspend fun connect(device: BluetoothDevice): Result<Unit> {
         return connectToDevice(device.address)

@@ -19,9 +19,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ix7.tracker.core.ScooterData
+import com.ix7.tracker.bluetooth.BluetoothRepository
+import com.ix7.tracker.bluetooth.HoverboardCommands
 import com.ix7.tracker.core.TemperatureThresholds
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import kotlin.math.*
+import com.ix7.tracker.core.ScooterData
 
 enum class RideMode(val emoji: String, val label: String) {
     PEDESTRIAN("🚶", "Piéton"),
@@ -49,12 +53,15 @@ data class SpeedLimits(
 @Composable
 fun RideScreen(
     scooterData: ScooterData,
-    isConnected: Boolean
+    isConnected: Boolean,
+    bluetoothManager: BluetoothRepository
 ) {
+    val scope = rememberCoroutineScope()
+
     var wheelMode by remember { mutableStateOf(WheelMode.ONE_WHEEL) }
     var speedUnit by remember { mutableStateOf(SpeedUnit.KMH) }
     var rideMode by remember { mutableStateOf(RideMode.ECO) }
-    var isLocked by remember { mutableStateOf(false) }
+    var isLocked by remember { mutableStateOf(false) }  // false = déverrouillé par défaut
     var isRiding by remember { mutableStateOf(false) }
     var isPaused by remember { mutableStateOf(false) }
     var isDebridged by remember { mutableStateOf(true) }
@@ -63,7 +70,6 @@ fun RideScreen(
     var rightTurn by remember { mutableStateOf(false) }
     var warningLights by remember { mutableStateOf(false) }
 
-    // Définir les limites de vitesse selon le mode
     val speedLimits = when {
         isDebridged && wheelMode == WheelMode.ONE_WHEEL -> SpeedLimits(20, 30, 40, 50)
         isDebridged && wheelMode == WheelMode.TWO_WHEELS -> SpeedLimits(15, 30, 45, 60)
@@ -96,23 +102,28 @@ fun RideScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Compteur en arc
             CompactSpeedometer(
                 speed = if (isConnected) currentSpeed else 0f,
                 maxSpeed = displayMaxSpeed.toFloat(),
                 modifier = Modifier.weight(1f)
             )
-
-            // Lock à droite
+// Plus bas dans le Button
             Button(
-                onClick = { isLocked = !isLocked },
+                onClick = {
+                    scope.launch {
+                        bluetoothManager.sendCommand(
+                            if (!isLocked) HoverboardCommands.LOCK else HoverboardCommands.UNLOCK  // INVERSE LA LOGIQUE
+                        )
+                    }
+                    isLocked = !isLocked
+                },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (isLocked) Color.Red else Color.Green
                 ),
                 modifier = Modifier.size(60.dp),
                 contentPadding = PaddingValues(0.dp)
             ) {
-                Text(if (isLocked) "🔒" else "🔓", fontSize = 24.sp)
+                Text(if (isLocked) "🔓" else "🔒", fontSize = 24.sp)
             }
         }
 
@@ -122,7 +133,6 @@ fun RideScreen(
             colors = CardDefaults.cardColors(containerColor = Color(0xFF2C2C2E))
         ) {
             Column(modifier = Modifier.padding(8.dp)) {
-                // Ligne 1: Type véhicule et contrôles
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -167,14 +177,24 @@ fun RideScreen(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Ligne 2: Modes de vitesse
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     RideMode.values().forEach { mode ->
                         Button(
-                            onClick = { rideMode = mode },
+                            onClick = {
+                                scope.launch {
+                                    val command = when (mode) {
+                                        RideMode.PEDESTRIAN -> HoverboardCommands.MODE_PIETON
+                                        RideMode.ECO -> HoverboardCommands.MODE_ECO
+                                        RideMode.RACE -> HoverboardCommands.MODE_RACE
+                                        RideMode.POWER -> HoverboardCommands.MODE_SPORT
+                                    }
+                                    bluetoothManager.sendCommand(command)
+                                }
+                                rideMode = mode
+                            },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (rideMode == mode) Color.Blue else Color.DarkGray
                             ),
@@ -205,42 +225,33 @@ fun RideScreen(
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             Button(
-                onClick = {
-                    leftTurn = !leftTurn
-                    if (leftTurn) rightTurn = false
-                },
+                onClick = { leftTurn = !leftTurn },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (leftTurn) Color(0xFFFF9500) else Color.DarkGray
+                    containerColor = Color.DarkGray  // GRIS = non fonctionnel
                 ),
+                enabled = false,  // AJOUTE CETTE LIGNE
                 modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
             ) {
                 Text("⬅️", fontSize = 20.sp)
             }
 
             Button(
-                onClick = {
-                    warningLights = !warningLights
-                    if (warningLights) {
-                        leftTurn = false
-                        rightTurn = false
-                    }
-                },
+                onClick = { warningLights = !warningLights },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (warningLights) Color.Red else Color.DarkGray
+                    containerColor = Color.DarkGray  // GRIS = non fonctionnel
                 ),
+                enabled = false,  // AJOUTE CETTE LIGNE
                 modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
             ) {
                 Text("⚠️", fontSize = 20.sp)
             }
 
             Button(
-                onClick = {
-                    rightTurn = !rightTurn
-                    if (rightTurn) leftTurn = false
-                },
+                onClick = { rightTurn = !rightTurn },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (rightTurn) Color(0xFFFF9500) else Color.DarkGray
+                    containerColor = Color.DarkGray  // GRIS = non fonctionnel
                 ),
+                enabled = false,  // AJOUTE CETTE LIGNE
                 modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
             ) {
                 Text("➡️", fontSize = 20.sp)
@@ -295,7 +306,7 @@ fun RideScreen(
             }
         }
 
-        // 6. Données compactes AVEC VOYANT TEMPÉRATURE
+        // 6. Données compactes avec température
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF2C2C2E))
@@ -309,8 +320,6 @@ fun RideScreen(
                 DataItem("Batterie", "${scooterData.battery.toInt()}%")
                 DataItem("Voltage", "%.1fV".format(scooterData.voltage))
                 DataItem("Odomètre", "%.1fkm".format(scooterData.odometer))
-
-                // NOUVEAU: Indicateur température avec alerte
                 TemperatureIndicator(temperature = scooterData.temperature)
             }
         }
@@ -333,15 +342,15 @@ fun RideScreen(
         }
     }
 
-    // Popup d'actions
     if (showActionsPopup) {
-        ActionsPopup(onDismiss = { showActionsPopup = false })
+        ActionsPopup(
+            onDismiss = { showActionsPopup = false },
+            bluetoothManager = bluetoothManager,
+            scope = scope
+        )
     }
 }
 
-/**
- * NOUVEAU: Indicateur température avec voyant coloré et alerte
- */
 @Composable
 private fun TemperatureIndicator(temperature: Float) {
     val (emoji, color, warning) = when {
@@ -352,25 +361,16 @@ private fun TemperatureIndicator(temperature: Float) {
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable {
-            // TODO: Afficher détails température
-        }
+        modifier = Modifier.clickable { }
     ) {
-        Text(
-            text = emoji,
-            fontSize = 20.sp
-        )
+        Text(text = emoji, fontSize = 20.sp)
         Text(
             text = "${temperature.toInt()}°C",
             fontSize = 14.sp,
             fontWeight = if (warning) FontWeight.Bold else FontWeight.Normal,
             color = color
         )
-        Text(
-            text = "Temp",
-            fontSize = 10.sp,
-            color = Color.Gray
-        )
+        Text(text = "Temp", fontSize = 10.sp, color = Color.Gray)
     }
 }
 
@@ -383,11 +383,7 @@ private fun DataItem(label: String, value: String) {
             fontWeight = FontWeight.Bold,
             color = Color.White
         )
-        Text(
-            text = label,
-            fontSize = 10.sp,
-            color = Color.Gray
-        )
+        Text(text = label, fontSize = 10.sp, color = Color.Gray)
     }
 }
 
@@ -402,26 +398,16 @@ private fun CompactSpeedometer(
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // Vitesse principale
             Text(
                 text = "${speed.toInt()}",
                 fontSize = 56.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )
-            // Unité et max
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "km/h",
-                    fontSize = 14.sp,
-                    color = Color.Gray
-                )
+                Text(text = "km/h", fontSize = 14.sp, color = Color.Gray)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "max ${maxSpeed.toInt()}",
-                    fontSize = 12.sp,
-                    color = Color.Gray
-                )
+                Text(text = "max ${maxSpeed.toInt()}", fontSize = 12.sp, color = Color.Gray)
             }
         }
     }
@@ -461,16 +447,11 @@ private fun RealTimeGraph(
                 val height = size.height
                 val pointSpacing = width / speedHistory.size.coerceAtLeast(1)
 
-                // Courbe de vitesse (bleue)
                 val speedPath = Path()
                 speedHistory.forEachIndexed { index, speed ->
                     val x = index * pointSpacing
                     val y = height - (speed / maxSpeed * height).coerceIn(0f, height)
-                    if (index == 0) {
-                        speedPath.moveTo(x, y)
-                    } else {
-                        speedPath.lineTo(x, y)
-                    }
+                    if (index == 0) speedPath.moveTo(x, y) else speedPath.lineTo(x, y)
                 }
                 drawPath(
                     path = speedPath,
@@ -478,16 +459,11 @@ private fun RealTimeGraph(
                     style = Stroke(width = 3f)
                 )
 
-                // Courbe de batterie (verte)
                 val batteryPath = Path()
                 batteryHistory.forEachIndexed { index, battery ->
                     val x = index * pointSpacing
                     val y = height - (battery / 100f * height)
-                    if (index == 0) {
-                        batteryPath.moveTo(x, y)
-                    } else {
-                        batteryPath.lineTo(x, y)
-                    }
+                    if (index == 0) batteryPath.moveTo(x, y) else batteryPath.lineTo(x, y)
                 }
                 drawPath(
                     path = batteryPath,
@@ -501,7 +477,9 @@ private fun RealTimeGraph(
 
 @Composable
 private fun ActionsPopup(
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    bluetoothManager: BluetoothRepository,
+    scope: CoroutineScope
 ) {
     var headlights by remember { mutableStateOf(false) }
     var neonLights by remember { mutableStateOf(false) }
@@ -510,56 +488,70 @@ private fun ActionsPopup(
         onDismissRequest = onDismiss,
         title = { Text("Actions", fontSize = 18.sp, fontWeight = FontWeight.Bold) },
         text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Phares
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (headlights) "💡" else "🔦", fontSize = 24.sp)
+                        Text(if (headlights) "💡" else "⚫", fontSize = 24.sp)
                         Spacer(modifier = Modifier.width(12.dp))
                         Text("Phares", fontSize = 16.sp)
                     }
                     Switch(
                         checked = headlights,
-                        onCheckedChange = { headlights = it }
+                        onCheckedChange = {
+                            scope.launch {
+                                bluetoothManager.sendCommand(
+                                    if (it) HoverboardCommands.LIGHT_ON
+                                    else HoverboardCommands.LIGHT_OFF
+                                )
+                            }
+                            headlights = it
+                        }
                     )
                 }
 
-                // Néons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (neonLights) "🌈" else "💫", fontSize = 24.sp)
+                        Text(if (neonLights) "🟣" else "⚫", fontSize = 24.sp)
                         Spacer(modifier = Modifier.width(12.dp))
                         Text("Néons", fontSize = 16.sp)
                     }
                     Switch(
                         checked = neonLights,
-                        onCheckedChange = { neonLights = it }
+                        onCheckedChange = {
+                            scope.launch {
+                                bluetoothManager.sendCommand(
+                                    if (it) HoverboardCommands.NEON_ON
+                                    else HoverboardCommands.NEON_OFF
+                                )
+                            }
+                            neonLights = it
+                        }
                     )
                 }
 
-                Divider()
+                HorizontalDivider()
 
-                // Klaxon
                 Button(
-                    onClick = { /* TODO: Envoyer commande klaxon */ },
-                    modifier = Modifier.fillMaxWidth()
+                    onClick = { },
+                    enabled = false,  // AJOUTE
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.DarkGray  // GRIS = non fonctionnel
+                    )
                 ) {
                     Text("🔊 Klaxon", fontSize = 16.sp)
                 }
 
-                // Enregistrer trajet
                 Button(
-                    onClick = { /* TODO: Sauvegarder trajet */ },
+                    onClick = { },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
                 ) {

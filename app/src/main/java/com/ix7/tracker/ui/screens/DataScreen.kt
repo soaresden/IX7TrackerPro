@@ -10,9 +10,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ix7.tracker.core.ScooterData
 import com.ix7.tracker.ui.components.DataCard
 import com.ix7.tracker.utils.FormatUtils
+import com.ix7.tracker.core.ScooterData
 
 @Composable
 fun DataScreen(
@@ -169,14 +169,20 @@ fun DataScreen(
             ) {
                 DataCard(
                     title = "Codes d'erreur",
-                    value = FormatUtils.formatErrorCodes(scooterData.errorCodes),
-                    color = if (scooterData.errorCodes > 0) MaterialTheme.colorScheme.error else Color.Unspecified,
+                    value = if (scooterData.errorCodes.isNotEmpty())
+                        "${scooterData.errorCodes.size} erreur(s)"
+                    else
+                        "Aucune",
+                    color = if (scooterData.errorCodes.isNotEmpty()) MaterialTheme.colorScheme.error else Color.Unspecified,
                     modifier = Modifier.weight(1f)
                 )
                 DataCard(
                     title = "Avertissements",
-                    value = FormatUtils.formatWarningCodes(scooterData.warningCodes),
-                    color = if (scooterData.warningCodes > 0) Color(0xFFFF9800) else Color.Unspecified,
+                    value = if (scooterData.warningCodes.isNotEmpty())
+                        "${scooterData.warningCodes.size} avertissement(s)"
+                    else
+                        "Aucun",
+                    color = if (scooterData.warningCodes.isNotEmpty()) Color(0xFFFF9800) else Color.Unspecified,
                     modifier = Modifier.weight(1f)
                 )
             }

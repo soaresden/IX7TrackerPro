@@ -8,7 +8,9 @@ import android.util.Log
 import com.ix7.tracker.core.*
 import kotlinx.coroutines.*
 import java.util.*
-
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 
 data class HoverboardData(
@@ -20,7 +22,10 @@ data class HoverboardData(
     val odometer: Int = 0,
     val tripDistance: Int = 0,
     val mode: Int = 0,
-    val errors: Int = 0
+    val errors: Int = 0,
+    val headlightsOn: Boolean = false,
+    val neonOn: Boolean = false,
+    val cruiseControlOn: Boolean = false
 )
 
 object ProtocolDecoder {
@@ -32,39 +37,48 @@ object ProtocolDecoder {
         val type = data[2].toInt() and 0xFF
 
         return when (type) {
-            0x3E -> decode16ByteFrame(data)  // Trame longue
-            0x32 -> decode12ByteFrame(data)  // Trame moyenne
-            0x30 -> decode10ByteFrame(data)  // Trame courte
+            0x30 -> decodeModeFrame(data)
+            0x3E -> decodeTelemetryFrame(data)
+            0x32 -> decodeBatteryFrame(data)
             else -> null
         }
     }
 
-    private fun decode16ByteFrame(data: ByteArray): HoverboardData {
-        // Extraction des données depuis les bytes
+    private fun decodeModeFrame(data: ByteArray): HoverboardData {
+        if (data.size < 8) return HoverboardData()
+
         val byte6 = data[6].toInt() and 0xFF
         val byte7 = data[7].toInt() and 0xFF
 
+        // États
+        val headlightsOn = byte6 == 0xC0 && byte7 == 0x35
+        val neonOn = byte6 == 0xC0 && byte7 == 0x34
+        val isMph = byte7 == 0x6B  // Si 6B = MPH, si E1 = KMH
+
+        // Modes
+        val mode = when {
+            byte6 == 0xC3 && byte7 == 0xE1 -> 0 // ECO KMH
+            byte6 == 0xC3 && byte7 == 0x6B -> 0 // ECO MPH
+            byte6 == 0x4A && byte7 == 0x36 -> 1 // PIÉTON
+            byte6 == 0x4A && byte7 == 0x35 -> 2 // RACE
+            byte6 == 0x4A && byte7 == 0x34 -> 3 // SPORT
+            else -> 0
+        }
+
         return HoverboardData(
-            battery = byte6,  // Approximation
-            mode = byte7
+            headlightsOn = headlightsOn,
+            neonOn = neonOn,
+            mode = mode
         )
     }
-
-    private fun decode12ByteFrame(data: ByteArray): HoverboardData {
-        val byte6 = data[6].toInt() and 0xFF
-        val byte7 = data[7].toInt() and 0xFF
-
-        return HoverboardData(
-            voltage = (byte6 * 256 + byte7) / 100f
-        )
+    private fun decodeTelemetryFrame(data: ByteArray): HoverboardData {
+        if (data.size < 16) return HoverboardData()
+        return HoverboardData()
     }
 
-    private fun decode10ByteFrame(data: ByteArray): HoverboardData {
-        val byte6 = data[6].toInt() and 0xFF
-
-        return HoverboardData(
-            temperature = byte6
-        )
+    private fun decodeBatteryFrame(data: ByteArray): HoverboardData {
+        if (data.size < 12) return HoverboardData()
+        return HoverboardData()
     }
 }
 
@@ -74,7 +88,8 @@ object ProtocolDecoder {
  */
 class BluetoothConnector(
     private val context: Context,
-    private val onStateChange: (ConnectionState) -> Unit
+    private val onStateChange: (ConnectionState) -> Unit,
+    private val onDataDecoded: (ByteArray) -> Unit  // AJOUTE CETTE LIGNE
 ) {
     companion object {
         private const val TAG = "BluetoothConnector"
@@ -123,7 +138,41 @@ class BluetoothConnector(
                 }
             }
         }
+        override fun onCharacteristicChanged(
+            gatt: BluetoothGatt?,
+            characteristic: BluetoothGattCharacteristic?
+        ) {
+            characteristic?.value?.let { data ->
+                val hex = data.joinToString(" ") { "%02X".format(it) }
+                val timestamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date())
 
+                // Log complet pour analyse
+                Log.e("BLE_RAW", "[$timestamp] SIZE:${data.size} $hex")
+
+                // Identifier le type de message
+                val type = if (data.size >= 3) {
+                    when (data[2]) {
+                        0x30.toByte() -> "MODE"
+                        0x37.toByte() -> "STATUS"
+                        0x3E.toByte() -> "TELEMETRY"
+                        0x32.toByte() -> "BATTERY"
+                        0x3A.toByte() -> "ACTION"
+                        else -> "TYPE_${"%02X".format(data[2])}"
+                    }
+                } else "SHORT"
+
+                Log.e("BLE_TYPE", "[$timestamp] $type")
+
+                // Décoder et notifier
+                ProtocolDecoder.decode(data)?.let { hoverData ->
+                    // Traitement des données décodées
+                }
+
+                onDataReceived?.invoke(data)
+                onDataDecoded(data)  // AJOUTE CETTE LIGNE
+
+            }
+        }
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 Log.i(TAG, "✅ Services découverts")
@@ -158,24 +207,6 @@ class BluetoothConnector(
             }
         }
 
-        override fun onCharacteristicChanged(
-            gatt: BluetoothGatt?,
-            characteristic: BluetoothGattCharacteristic?
-        ) {
-            characteristic?.value?.let { data ->
-                val hex = data.joinToString(" ") { "%02X".format(it) }
-                Log.d(TAG, "📥 Data reçue: $hex")
-
-                // Décoder le protocole
-                ProtocolDecoder.decode(data)?.let { hoverData ->
-                    Log.i(TAG, "🔋 Batterie: ${hoverData.battery}%")
-                    Log.i(TAG, "⚡ Voltage: ${hoverData.voltage}V")
-                    Log.i(TAG, "🌡️ Température: ${hoverData.temperature}°C")
-                }
-
-                onDataReceived?.invoke(data)
-            }
-        }
 
         override fun onCharacteristicWrite(
             gatt: BluetoothGatt,
@@ -360,31 +391,35 @@ class BluetoothConnector(
     /**
      * Envoi d'une commande
      */
-    fun sendCommand(command: ByteArray): Result<Unit> {
-        if (!isNotificationsEnabled) {
-            Log.w(TAG, "⚠️ Notifications pas encore activées")
-            return Result.failure(Exception("Notifications not ready"))
+    suspend fun sendCommand(command: ByteArray): Result<Unit> {
+        val hex = command.joinToString(" ") { "%02X".format(it) }
+        Log.e("BluetoothConnector", "📤 sendCommand() appelé avec: $hex")
+
+        if (writeCharacteristic == null) {
+            Log.e("BluetoothConnector", "❌ writeCharacteristic est NULL")
+            return Result.failure(Exception("writeCharacteristic null"))
         }
 
-        val characteristic = writeCharacteristic
-        if (characteristic == null) {
-            Log.e(TAG, "❌ Characteristic non disponible")
-            return Result.failure(Exception("Characteristic not found"))
+        if (bluetoothGatt == null) {
+            Log.e("BluetoothConnector", "❌ bluetoothGatt est NULL")
+            return Result.failure(Exception("bluetoothGatt null"))
         }
 
-        return try {
-            ProtocolUtils.logFrame("→ ENVOI", command)
-            characteristic.value = command
-            val success = bluetoothGatt?.writeCharacteristic(characteristic) ?: false
+        return withContext(Dispatchers.IO) {
+            try {
+                writeCharacteristic?.value = command
+                val success = bluetoothGatt?.writeCharacteristic(writeCharacteristic)
+                Log.e("BluetoothConnector", "📤 writeCharacteristic retourne: $success")
 
-            if (success) {
-                Result.success(Unit)
-            } else {
-                Result.failure(Exception("Write failed"))
+                if (success == true) {
+                    Result.success(Unit)
+                } else {
+                    Result.failure(Exception("writeCharacteristic a échoué"))
+                }
+            } catch (e: Exception) {
+                Log.e("BluetoothConnector", "❌ Exception dans sendCommand", e)
+                Result.failure(e)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Erreur envoi", e)
-            Result.failure(e)
         }
     }
 

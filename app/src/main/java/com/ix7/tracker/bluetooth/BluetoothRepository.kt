@@ -37,4 +37,5 @@ interface BluetoothRepository {
     fun isBluetoothEnabled(): Boolean
     fun hasNecessaryPermissions(): Boolean
     fun clearDiscoveredDevices()
+    
 }

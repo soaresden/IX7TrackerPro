@@ -10,8 +10,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ix7.tracker.core.ScooterData
 import com.ix7.tracker.core.ConnectionState
+import com.ix7.tracker.core.ScooterData
 
 @Composable
 fun CompactDataScreen(
