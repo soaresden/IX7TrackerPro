@@ -5,29 +5,46 @@ import com.ix7.tracker.core.ProtocolConstants
 import com.ix7.tracker.core.ProtocolUtils
 import com.ix7.tracker.core.ScooterData
 
+/**
+ * Handler Bluetooth FINAL avec parsing des trames d'initialisation
+ * Types découverts: 0x02 et 0x1A (envoyés au début uniquement)
+ */
 class BluetoothDataHandler(
     private val onDataParsed: (ScooterData) -> Unit
 ) {
     companion object {
-        private const val TAG = "BluetoothDataHandler"
+        private const val TAG = "BLE"
+        private const val ENABLE_DETAILED_LOGS = true // Pour voir les nouvelles trames
     }
 
     private var currentData = ScooterData()
     private val frameBuffer = mutableListOf<Byte>()
+    private var frameCount = 0
+    private var lastFrameType = 0.toByte()
+    private var initFramesReceived = false
 
     fun handleData(data: ByteArray) {
         try {
-            // Log brut pour debug
-            val hex = data.joinToString(" ") { "%02X".format(it) }
-            Log.e("BLE_RAW", "[${System.currentTimeMillis()}] SIZE:${data.size} $hex")
+            frameCount++
+
+            // Log raccourci
+            if (ENABLE_DETAILED_LOGS && frameCount <= 200) {
+                val hex = data.joinToString(" ") { "%02X".format(it) }
+                Log.e(TAG, "[$frameCount] $hex")
+            }
+
+            // Recherche kilométrage dans les 100 premières trames
+            if (frameCount < 100) {
+                searchForOdometer(data)
+            }
 
             // Décodage frames 61 9E
-            if (data.size >= 2 && data[0] == 0x61.toByte() && data[1] == 0x9E.toByte()) {
+            if (data.size >= 3 && data[0] == 0x61.toByte() && data[1] == 0x9E.toByte()) {
                 parse61Frame(data)
                 return
             }
 
-            // Protocole 55 AA
+            // Protocole 55 AA (legacy)
             frameBuffer.addAll(data.toList())
             while (frameBuffer.size >= 5) {
                 if (!tryParseFrame()) {
@@ -40,81 +57,184 @@ class BluetoothDataHandler(
             }
 
         } catch (e: Exception) {
-            Log.e(TAG, "Erreur traitement", e)
+            Log.e(TAG, "Erreur: ${e.message}")
+        }
+    }
+
+    /**
+     * Recherche kilométrage 34.7 km
+     */
+    private fun searchForOdometer(data: ByteArray) {
+        // Cherche 347 (0x015B) - dixièmes
+        for (i in 0 until data.size - 1) {
+            val value = ((data[i].toInt() and 0xFF) shl 8) or (data[i+1].toInt() and 0xFF)
+            if (value == 347 || value == 0x015B) {
+                Log.e(TAG, "🎯 ODOMETER! 34.7km aux bytes[$i-${i+1}] = 0x${"%04X".format(value)}")
+            }
+        }
+
+        // Cherche 3470 (0x0D8E) - centièmes
+        for (i in 0 until data.size - 1) {
+            val value = ((data[i].toInt() and 0xFF) shl 8) or (data[i+1].toInt() and 0xFF)
+            if (value == 3470 || value == 0x0D8E) {
+                Log.e(TAG, "🎯 ODOMETER! 34.7km aux bytes[$i-${i+1}] = 0x${"%04X".format(value)}")
+            }
+        }
+
+        // Cherche ~3470 (entre 3400 et 3500)
+        for (i in 0 until data.size - 1) {
+            val value = ((data[i].toInt() and 0xFF) shl 8) or (data[i+1].toInt() and 0xFF)
+            if (value in 3400..3500) {
+                val km = value / 100f
+                Log.w(TAG, "⚠️ POSSIBLE ODO: ${km}km aux bytes[$i-${i+1}] = 0x${"%04X".format(value)}")
+            }
         }
     }
 
     private fun parse61Frame(frame: ByteArray) {
-        val hex = frame.joinToString(" ") { "%02X".format(it) }
         val type = if (frame.size > 2) frame[2] else 0
 
+        // Log nouveaux types
+        if (type != lastFrameType) {
+            Log.w(TAG, "NEW TYPE: 0x${"%02X".format(type)} size=${frame.size}")
+            lastFrameType = type
+        }
+
         when {
-            // Frame 0x3E - 16 bytes - Télémétrie
+            // TYPE 0x02 - TRAME D'INITIALISATION (48 bytes)
+            frame.size >= 40 && frame[2] == 0x02.toByte() -> {
+                parseFrame02_Init(frame)
+            }
+
+            // TYPE 0x1A - TRAME DE DONNÉES ÉTENDUES (58 bytes)
+            frame.size >= 50 && frame[2] == 0x1A.toByte() -> {
+                parseFrame1A_Extended(frame)
+            }
+
+            // TYPE 0x3E - VITESSE (16 bytes)
             frame.size == 16 && frame[2] == 0x3E.toByte() -> {
-                val byte5 = frame[5].toInt() and 0xFF
-                val byte6 = frame[6].toInt() and 0xFF
-
-                // Pattern A (repos): DE 34 34...
-                // Pattern B (mouvement?): DA C3 34 9E...
-                val isMoving = byte5 == 0xDA
-
-                // Essayer de trouver la vitesse dans différentes positions
-                var speed = 0f
-
-                if (isMoving) {
-                    // Essai 1: bytes 7-8
-                    val speed1 = ((frame[7].toInt() and 0xFF) shl 8) or (frame[8].toInt() and 0xFF)
-                    // Essai 2: bytes 8-9
-                    val speed2 = ((frame[8].toInt() and 0xFF) shl 8) or (frame[9].toInt() and 0xFF)
-
-                    speed = when {
-                        speed1 in 1..5000 -> speed1 / 100f
-                        speed2 in 1..5000 -> speed2 / 100f
-                        else -> 5f // Valeur par défaut si mouvement détecté
-                    }
-
-                    Log.d(TAG, "MOUVEMENT DÉTECTÉ! speed1=$speed1 speed2=$speed2 → speed=$speed km/h")
-                }
-
-                currentData = currentData.copy(speed = speed)
-                Log.d(TAG, "Frame 0x3E: moving=$isMoving speed=$speed km/h")
+                parseFrame3E(frame)
             }
 
-            // Frame 0x30 - 10 bytes - États
+            // TYPE 0x30 - États (10 bytes)
             frame.size == 10 && frame[2] == 0x30.toByte() -> {
-                val byte5 = frame[5].toInt() and 0xFF
-                val byte6 = frame[6].toInt() and 0xFF
-
-                Log.d(TAG, "Frame 0x30: byte5=0x${"%02X".format(byte5)} byte6=0x${"%02X".format(byte6)}")
+                // États secondaires
             }
 
-            // Frame 0x32 - 12 bytes - Batterie/Température
+            // TYPE 0x32 - BATTERIE (12 bytes)
             frame.size == 12 && frame[2] == 0x32.toByte() -> {
-                // Frame: 61 9E 32 17 35 0B A4 35 A4 35 40 CA
-                //                       ^^^^^ = batterie en millièmes
+                parseFrame32(frame)
+            }
 
-                // Batterie sur bytes 6-7 (big endian)
-                val batteryRaw = ((frame[6].toInt() and 0xFF) shl 8) or (frame[7].toInt() and 0xFF)
-                val battery = (batteryRaw / 1000f).coerceIn(0f, 100f)
-
-                // Température : valeur par défaut (pas encore trouvée dans 0x32)
-                val temperature = 27f
-
-                // Tension : valeur par défaut
-                val voltage = 47.7f
-
-                currentData = currentData.copy(
-                    battery = battery,
-                    temperature = temperature,
-                    voltage = voltage
-                )
-
-                Log.d(TAG, "Frame 0x32: battery=${battery}% (raw=$batteryRaw)")
+            else -> {
+                if (ENABLE_DETAILED_LOGS && frameCount <= 100) {
+                    Log.w(TAG, "UNKNOWN: type=0x${"%02X".format(type)} size=${frame.size}")
+                }
             }
         }
 
         onDataParsed(currentData)
     }
+
+    /**
+     * Parse TYPE 0x02 - TRAME D'INITIALISATION
+     * Contient probablement: kilométrage, temps total, versions
+     */
+    private fun parseFrame02_Init(frame: ByteArray) {
+        if (initFramesReceived) return // Déjà parsé
+
+        val hex = frame.joinToString(" ") { "%02X".format(it) }
+        Log.e(TAG, "📦 INIT 0x02 (${ frame.size}b): $hex")
+
+        // Analyse toutes les paires de bytes
+        Log.e(TAG, "=== ANALYSE TRAME 0x02 ===")
+        for (i in 5 until minOf(frame.size - 1, 45)) {
+            val value16 = ((frame[i].toInt() and 0xFF) shl 8) or (frame[i+1].toInt() and 0xFF)
+            val valueLE = ((frame[i+1].toInt() and 0xFF) shl 8) or (frame[i].toInt() and 0xFF)
+
+            if (value16 > 100 && value16 < 50000) {
+                Log.d(TAG, "  [$i-${i+1}] BE=0x${"%04X".format(value16)}=$value16 LE=$valueLE → ${value16/100f}km ${value16/10f}°C")
+            }
+        }
+
+        // Bytes spécifiques identifiés
+        val byte14_15 = ((frame[14].toInt() and 0xFF) shl 8) or (frame[15].toInt() and 0xFF)
+        Log.e(TAG, "Bytes[14-15] = 0x${"%04X".format(byte14_15)} = ${byte14_15/100f} km")
+
+        initFramesReceived = true
+    }
+
+    /**
+     * Parse TYPE 0x1A - TRAME DONNÉES ÉTENDUES
+     * Contient probablement aussi des infos importantes
+     */
+    private fun parseFrame1A_Extended(frame: ByteArray) {
+        val hex = frame.joinToString(" ") { "%02X".format(it) }
+        Log.e(TAG, "📦 EXTENDED 0x1A (${frame.size}b): $hex")
+
+        // Analyse toutes les paires de bytes
+        Log.e(TAG, "=== ANALYSE TRAME 0x1A ===")
+        for (i in 5 until minOf(frame.size - 1, 50)) {
+            val value16 = ((frame[i].toInt() and 0xFF) shl 8) or (frame[i+1].toInt() and 0xFF)
+            val valueLE = ((frame[i+1].toInt() and 0xFF) shl 8) or (frame[i].toInt() and 0xFF)
+
+            if (value16 > 100 && value16 < 50000) {
+                Log.d(TAG, "  [$i-${i+1}] BE=0x${"%04X".format(value16)}=$value16 LE=$valueLE → ${value16/100f}km")
+            }
+        }
+
+        // Cherche temps total (>10h15m = >615 minutes = 36900 secondes)
+        for (i in 5 until minOf(frame.size - 3, 50)) {
+            val value32 = ((frame[i].toInt() and 0xFF) shl 24) or
+                    ((frame[i+1].toInt() and 0xFF) shl 16) or
+                    ((frame[i+2].toInt() and 0xFF) shl 8) or
+                    (frame[i+3].toInt() and 0xFF)
+
+            if (value32 in 30000..50000) {
+                val hours = value32 / 3600
+                val minutes = (value32 % 3600) / 60
+                Log.e(TAG, "🕐 TEMPS? bytes[$i-${i+3}] = ${value32}s = ${hours}h${minutes}m")
+            }
+        }
+    }
+
+    /**
+     * Frame 0x3E - VITESSE
+     */
+    private fun parseFrame3E(frame: ByteArray) {
+        val byte8 = frame[8].toInt() and 0xFF
+        val speed = byte8 / 100f
+
+        if (Math.abs(currentData.speed - speed) > 0.05f) {
+            currentData = currentData.copy(speed = speed)
+            if (ENABLE_DETAILED_LOGS && frameCount <= 100) {
+                Log.d(TAG, "Vitesse: ${speed} km/h")
+            }
+        }
+    }
+
+    /**
+     * Frame 0x32 - BATTERIE
+     */
+    private fun parseFrame32(frame: ByteArray) {
+        val batteryRaw = ((frame[6].toInt() and 0xFF) shl 8) or (frame[7].toInt() and 0xFF)
+        val battery = (batteryRaw / 1000f).coerceIn(0f, 100f)
+
+        if (Math.abs(currentData.battery - battery) > 0.5f) {
+            currentData = currentData.copy(battery = battery)
+            if (ENABLE_DETAILED_LOGS && frameCount <= 100) {
+                Log.d(TAG, "Batterie: ${battery}%")
+            }
+        }
+
+        val temp1 = (frame[6].toInt() and 0xFF) / 10f + 10f
+        currentData = currentData.copy(
+            temperature = temp1,
+            voltage = 47.7f
+        )
+    }
+
+    // ========== PROTOCOLE 55 AA (Legacy) ==========
 
     private fun tryParseFrame(): Boolean {
         if (frameBuffer.size < 2) return false
@@ -146,7 +266,6 @@ class BluetoothDataHandler(
 
     private fun parseValidFrame(frame: ByteArray) {
         if (frame.size < 5) return
-
         val command = frame[3]
         when {
             command == 0x23.toByte() && frame.size >= 20 -> parseLongStatusFrame(frame)
@@ -165,7 +284,6 @@ class BluetoothDataHandler(
 
             val temperature = frame[5].toInt() and 0xFF
             val battery = if (frame.size > 22) frame[22].toInt() and 0xFF else 0
-
             val voltageRaw = if (frame.size > 11) {
                 ((frame[10].toInt() and 0xFF) shl 8) or (frame[11].toInt() and 0xFF)
             } else 0
@@ -176,25 +294,17 @@ class BluetoothDataHandler(
             } else 0
             val speed = speedRaw / 100.0f
 
-            val currentRaw = if (frame.size > 13) {
-                ((frame[12].toInt() and 0xFF) shl 8) or (frame[13].toInt() and 0xFF)
-            } else 0
-            val current = currentRaw / 10.0f
-            val power = voltage * current
-
             currentData = currentData.copy(
                 speed = if (speed > 0) speed else currentData.speed,
                 battery = if (battery > 0) battery.toFloat() else currentData.battery,
                 voltage = if (voltage > 0) voltage else currentData.voltage,
-                current = current,
-                power = power,
                 temperature = if (temperature > 0) temperature.toFloat() else currentData.temperature
             )
 
             onDataParsed(currentData)
 
         } catch (e: Exception) {
-            Log.e(TAG, "Erreur parse", e)
+            Log.e(TAG, "Erreur parse 55AA: ${e.message}")
         }
     }
 
@@ -205,6 +315,9 @@ class BluetoothDataHandler(
     fun reset() {
         currentData = ScooterData()
         frameBuffer.clear()
+        frameCount = 0
+        lastFrameType = 0
+        initFramesReceived = false
     }
 
     fun getCurrentData(): ScooterData = currentData
