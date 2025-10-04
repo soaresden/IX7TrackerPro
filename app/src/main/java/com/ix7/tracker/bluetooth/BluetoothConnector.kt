@@ -12,7 +12,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-
 data class HoverboardData(
     val speed: Float = 0f,
     val battery: Int = 0,
@@ -50,18 +49,15 @@ object ProtocolDecoder {
         val byte6 = data[6].toInt() and 0xFF
         val byte7 = data[7].toInt() and 0xFF
 
-        // États
         val headlightsOn = byte6 == 0xC0 && byte7 == 0x35
         val neonOn = byte6 == 0xC0 && byte7 == 0x34
-        val isMph = byte7 == 0x6B  // Si 6B = MPH, si E1 = KMH
 
-        // Modes
         val mode = when {
-            byte6 == 0xC3 && byte7 == 0xE1 -> 0 // ECO KMH
-            byte6 == 0xC3 && byte7 == 0x6B -> 0 // ECO MPH
-            byte6 == 0x4A && byte7 == 0x36 -> 1 // PIÉTON
-            byte6 == 0x4A && byte7 == 0x35 -> 2 // RACE
-            byte6 == 0x4A && byte7 == 0x34 -> 3 // SPORT
+            byte6 == 0xC3 && byte7 == 0xE1 -> 0
+            byte6 == 0xC3 && byte7 == 0x6B -> 0
+            byte6 == 0x4A && byte7 == 0x36 -> 1
+            byte6 == 0x4A && byte7 == 0x35 -> 2
+            byte6 == 0x4A && byte7 == 0x34 -> 3
             else -> 0
         }
 
@@ -71,6 +67,7 @@ object ProtocolDecoder {
             mode = mode
         )
     }
+
     private fun decodeTelemetryFrame(data: ByteArray): HoverboardData {
         if (data.size < 16) return HoverboardData()
         return HoverboardData()
@@ -82,19 +79,13 @@ object ProtocolDecoder {
     }
 }
 
-/**
- * Gestionnaire de connexion Bluetooth BLE
- * CORRIGÉ : Séquence de connexion identique à l'app officielle
- */
 class BluetoothConnector(
     private val context: Context,
     private val onStateChange: (ConnectionState) -> Unit,
-    private val onDataDecoded: (ByteArray) -> Unit  // AJOUTE CETTE LIGNE
+    private val onDataDecoded: (ByteArray) -> Unit
 ) {
     companion object {
         private const val TAG = "BluetoothConnector"
-        // ✅ APRÈS
-// Nordic UART Service (NUS) - Ton hoverboard utilise ça !
         private val SERVICE_UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
         private val CHAR_WRITE_UUID = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
         private val CHAR_NOTIFY_UUID = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e")
@@ -112,18 +103,13 @@ class BluetoothConnector(
     private var isNotificationsEnabled = false
     private var pollingJob: Job? = null
 
-    /**
-     * Callback GATT
-     */
     private val gattCallback = object : BluetoothGattCallback() {
-
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     Log.i(TAG, "✅ Connecté au GATT server")
                     onStateChange(ConnectionState.CONNECTED)
 
-                    // Découvrir les services
                     handler.postDelayed({
                         val result = gatt.discoverServices()
                         Log.d(TAG, "Découverte services lancée: $result")
@@ -138,18 +124,17 @@ class BluetoothConnector(
                 }
             }
         }
+
         override fun onCharacteristicChanged(
-            gatt: BluetoothGatt?,
-            characteristic: BluetoothGattCharacteristic?
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic
         ) {
-            characteristic?.value?.let { data ->
+            characteristic.value?.let { data ->
                 val hex = data.joinToString(" ") { "%02X".format(it) }
                 val timestamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date())
 
-                // Log complet pour analyse
                 Log.e("BLE_RAW", "[$timestamp] SIZE:${data.size} $hex")
 
-                // Identifier le type de message
                 val type = if (data.size >= 3) {
                     when (data[2]) {
                         0x30.toByte() -> "MODE"
@@ -163,21 +148,19 @@ class BluetoothConnector(
 
                 Log.e("BLE_TYPE", "[$timestamp] $type")
 
-                // Décoder et notifier
                 ProtocolDecoder.decode(data)?.let { hoverData ->
                     // Traitement des données décodées
                 }
 
                 onDataReceived?.invoke(data)
-                onDataDecoded(data)  // AJOUTE CETTE LIGNE
-
+                onDataDecoded(data)
             }
         }
+
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 Log.i(TAG, "✅ Services découverts")
 
-                // Activer les notifications
                 val success = enableNotifications(gatt)
                 if (success) {
                     Log.i(TAG, "✅ Notifications activées")
@@ -198,7 +181,6 @@ class BluetoothConnector(
                 Log.i(TAG, "✅ Descriptor écrit avec succès")
                 isNotificationsEnabled = true
 
-                // MAINTENANT on peut envoyer des commandes
                 handler.postDelayed({
                     sendInitialCommands()
                 }, 200)
@@ -206,7 +188,6 @@ class BluetoothConnector(
                 Log.e(TAG, "❌ Échec écriture descriptor: $status")
             }
         }
-
 
         override fun onCharacteristicWrite(
             gatt: BluetoothGatt,
@@ -221,14 +202,7 @@ class BluetoothConnector(
         }
     }
 
-    /**
-     * Active les notifications sur la characteristic
-     */
-    /**
-     * Active les notifications sur la characteristic
-     */
     private fun enableNotifications(gatt: BluetoothGatt): Boolean {
-        // 🔍 DIAGNOSTIC : Lister TOUS les services disponibles
         Log.i(TAG, "📋 === LISTE DE TOUS LES SERVICES DÉCOUVERTS ===")
         gatt.services.forEach { service ->
             Log.i(TAG, "  📦 Service: ${service.uuid}")
@@ -244,9 +218,7 @@ class BluetoothConnector(
         }
         Log.i(TAG, "📋 === FIN DE LA LISTE ===")
 
-        // Chercher le service NUS
         val service = gatt.getService(SERVICE_UUID)
-
         if (service == null) {
             Log.e(TAG, "❌ Service NUS non trouvé")
             return false
@@ -254,9 +226,7 @@ class BluetoothConnector(
 
         Log.i(TAG, "✅ Service NUS trouvé: ${service.uuid}")
 
-// Characteristic pour NOTIFY
         val charNotify = service.getCharacteristic(CHAR_NOTIFY_UUID)
-// Characteristic pour WRITE
         val charWrite = service.getCharacteristic(CHAR_WRITE_UUID)
 
         if (charNotify == null || charWrite == null) {
@@ -266,18 +236,14 @@ class BluetoothConnector(
 
         Log.i(TAG, "✅ Characteristics NUS trouvées")
 
-// Sauvegarder la characteristic WRITE
         writeCharacteristic = charWrite
 
-// Activer les notifications sur NOTIFY
         val notifySuccess = gatt.setCharacteristicNotification(charNotify, true)
-
         if (!notifySuccess) {
             Log.e(TAG, "❌ Échec setCharacteristicNotification")
             return false
         }
 
-// Écrire dans le descriptor CCCD sur la characteristic NOTIFY
         val descriptor = charNotify.getDescriptor(CCCD_UUID)
         if (descriptor == null) {
             Log.e(TAG, "❌ Descriptor CCCD non trouvé")
@@ -292,15 +258,11 @@ class BluetoothConnector(
         return writeSuccess
     }
 
-    /**
-     * Envoie les commandes initiales (comme l'app officielle)
-     */
     private fun sendInitialCommands() {
         scope.launch {
             Log.i(TAG, "📤 Envoi commandes REPLAY depuis Wireshark...")
             delay(200)
 
-            // Vraies commandes capturées de l'app officielle
             val commands = listOf(
                 byteArrayOf(0x61, 0x9E.toByte(), 0x37, 0x15, 0x9E.toByte(), 0xD3.toByte(), 0x5A, 0x8E.toByte(), 0xCB.toByte()),
                 byteArrayOf(0x61, 0x9E.toByte(), 0x37, 0x14, 0x53, 0x2E, 0xE0.toByte(), 0x19, 0xCB.toByte()),
@@ -311,26 +273,21 @@ class BluetoothConnector(
                 val hex = cmd.joinToString(" ") { "%02X".format(it) }
                 Log.d(TAG, "→ Replay ${index + 1}: $hex")
                 sendCommand(cmd)
-                delay(100) // Toutes les 100ms comme l'app officielle
+                delay(100)
             }
 
             Log.i(TAG, "✅ Commandes replay envoyées - En attente réponse...")
 
-            // Puis démarrer le polling avec la même commande
             delay(300)
             startPolling()
         }
     }
 
-    /**
-     * Démarre le polling automatique (comme l'app officielle)
-     */
     private fun startPolling() {
         pollingJob?.cancel()
         pollingJob = scope.launch {
             Log.i(TAG, "🔄 Polling démarré (toutes les 300ms)")
 
-            // Commande de polling capturée
             val pollingCmd = byteArrayOf(0x61, 0x9E.toByte(), 0x37, 0x14, 0x55, 0xDE.toByte(), 0x3C, 0xBD.toByte(), 0xCA.toByte())
 
             while (isActive && isNotificationsEnabled) {
@@ -340,18 +297,12 @@ class BluetoothConnector(
         }
     }
 
-    /**
-     * Arrête le polling
-     */
     private fun stopPolling() {
         pollingJob?.cancel()
         pollingJob = null
         Log.d(TAG, "⏸️ Polling arrêté")
     }
 
-    /**
-     * Connexion au device
-     */
     fun connect(address: String, dataCallback: (ByteArray) -> Unit): Result<Unit> {
         return try {
             onDataReceived = dataCallback
@@ -375,9 +326,6 @@ class BluetoothConnector(
         }
     }
 
-    /**
-     * Déconnexion
-     */
     fun disconnect(): Result<Unit> {
         Log.i(TAG, "🔌 Déconnexion...")
         stopPolling()
@@ -388,9 +336,6 @@ class BluetoothConnector(
         return Result.success(Unit)
     }
 
-    /**
-     * Envoi d'une commande
-     */
     suspend fun sendCommand(command: ByteArray): Result<Unit> {
         val hex = command.joinToString(" ") { "%02X".format(it) }
         Log.e("BluetoothConnector", "📤 sendCommand() appelé avec: $hex")
@@ -423,9 +368,6 @@ class BluetoothConnector(
         }
     }
 
-    /**
-     * Nettoyage
-     */
     fun cleanup() {
         stopPolling()
         scope.cancel()
@@ -433,28 +375,5 @@ class BluetoothConnector(
         bluetoothGatt?.close()
         bluetoothGatt = null
         Log.d(TAG, "🧹 Nettoyage terminé")
-    }
-
-
-    // Ajoute dans BluetoothConnector.kt
-    private fun sendCapturedCommands() {
-        scope.launch {
-            delay(200)
-
-            // Bytes capturés de Wireshark (les vraies commandes)
-            val commands = listOf(
-                byteArrayOf(0x61, 0x9E.toByte(), 0x37, 0x15, 0x9E.toByte(), 0xD3.toByte(), 0x5A, 0x8E.toByte(), 0xCB.toByte()),
-                byteArrayOf(0x61, 0x9E.toByte(), 0x37, 0x14, 0x53, 0x2E, 0xE0.toByte(), 0x19, 0xCB.toByte()),
-                byteArrayOf(0x61, 0x9E.toByte(), 0x37, 0x14, 0x55, 0xDE.toByte(), 0x3C, 0xBD.toByte(), 0xCA.toByte())
-            )
-
-            commands.forEach { cmd ->
-                Log.d(TAG, "→ Replay: ${cmd.joinToString(" ") { "%02X".format(it) }}")
-                sendCommand(cmd)
-                delay(100)
-            }
-
-            Log.i(TAG, "✅ Commandes replay envoyées")
-        }
     }
 }
