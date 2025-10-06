@@ -13,8 +13,6 @@ import android.util.Log
 import com.ix7.tracker.core.ConnectionState
 import com.ix7.tracker.core.RideMode
 import com.ix7.tracker.core.ScooterData
-import com.ix7.tracker.protocol.CommandBuilder
-import com.ix7.tracker.protocol.ProtocolConstants
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -25,6 +23,7 @@ import java.util.UUID
 
 /**
  * Connecteur Bluetooth pour le protocole 61 9E (iX7 Pro)
+ * VERSION SIMPLIFIÉE - Commandes en dur
  */
 class BluetoothConnector(
     private val context: Context,
@@ -40,9 +39,18 @@ class BluetoothConnector(
         private val RX_CHAR_UUID = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e") // Notify
         private val CCCD_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
-        // Intervalles de polling
-        private const val POLLING_INTERVAL_MS = 1500L // 1.5 secondes
+        // Intervalles
+        private const val POLLING_INTERVAL_MS = 1500L
         private const val INIT_SEQUENCE_DELAY_MS = 300L
+
+        // Commandes de base (en dur)
+        private val CMD_KEEP_ALIVE = byteArrayOf(
+            0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x00, 0x00, 0x34, 0xFF.toByte(), 0xCB.toByte()
+        )
+
+        private val CMD_INIT_1 = byteArrayOf(
+            0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x00, 0x00, 0x34, 0xFF.toByte(), 0xCB.toByte()
+        )
     }
 
     private var bluetoothGatt: BluetoothGatt? = null
@@ -58,141 +66,61 @@ class BluetoothConnector(
     private var isPolling = false
     private var pollingRunnable: Runnable? = null
 
-    // ========== GATT CALLBACK ==========
-
+    // Callback Bluetooth
     private val gattCallback = object : BluetoothGattCallback() {
-
-        override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
+        override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
-                    Log.i(TAG, "✅ Connecté au GATT server")
+                    Log.i(TAG, "✅ Connecté au GATT")
                     onStateChange(ConnectionState.CONNECTED)
-
-                    // Découvrir les services
-                    handler.postDelayed({
-                        gatt.discoverServices()
-                    }, 600)
+                    bluetoothGatt?.discoverServices()
                 }
-
                 BluetoothProfile.STATE_DISCONNECTED -> {
-                    Log.i(TAG, "❌ Déconnecté du GATT server")
+                    Log.i(TAG, "❌ Déconnecté")
                     onStateChange(ConnectionState.DISCONNECTED)
                     stopPolling()
-                    cleanup()
                 }
             }
         }
 
-        override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
+        override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                Log.i(TAG, "📋 Services découverts")
-
-                val service = gatt.getService(SERVICE_UUID)
-                if (service != null) {
-                    writeCharacteristic = service.getCharacteristic(TX_CHAR_UUID)
-                    readCharacteristic = service.getCharacteristic(RX_CHAR_UUID)
-
-                    if (writeCharacteristic != null && readCharacteristic != null) {
-                        Log.i(TAG, "✅ Caractéristiques trouvées")
-
-                        // Activer les notifications
-                        enableNotifications()
-                    } else {
-                        Log.e(TAG, "❌ Caractéristiques manquantes")
-                        onStateChange(ConnectionState.ERROR)
-                    }
-                } else {
-                    Log.e(TAG, "❌ Service NUS non trouvé")
-                    onStateChange(ConnectionState.ERROR)
-                }
-            }
-        }
-
-        override fun onCharacteristicChanged(
-            gatt: BluetoothGatt,
-            characteristic: BluetoothGattCharacteristic
-        ) {
-            val data = characteristic.value
-            if (data != null && data.isNotEmpty()) {
-                // Traiter les données reçues
-                val parsedData = dataHandler.handleData(data)
-                if (parsedData != null) {
-                    // Merger avec les données actuelles
-                    currentScooterData = currentScooterData.copy(
-                        speed = if (parsedData.speed > 0) parsedData.speed else currentScooterData.speed,
-                        battery = if (parsedData.battery > 0) parsedData.battery else currentScooterData.battery,
-                        currentMode = parsedData.currentMode ?: currentScooterData.currentMode,
-                        odometer = if (parsedData.odometer > 0) parsedData.odometer else currentScooterData.odometer,
-                        temperature = if (parsedData.temperature > 0) parsedData.temperature else currentScooterData.temperature,
-                        isLocked = parsedData.isLocked,
-                        headlightsOn = parsedData.headlightsOn,
-                        neonOn = parsedData.neonOn,
-                        isUnlocked = parsedData.isUnlocked,
-                        cruiseControl = parsedData.cruiseControl
-                    )
-
-                    // Notifier
-                    onDataReceived(currentScooterData)
-                }
-            }
-        }
-
-        override fun onDescriptorWrite(
-            gatt: BluetoothGatt,
-            descriptor: BluetoothGattDescriptor,
-            status: Int
-        ) {
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                Log.i(TAG, "✅ Notifications activées")
-
-                // Lancer la séquence d'initialisation
+                Log.i(TAG, "🔍 Services découverts")
+                setupCharacteristics()
                 scope.launch {
                     startInitSequence()
                 }
             }
         }
 
-        override fun onCharacteristicWrite(
-            gatt: BluetoothGatt,
-            characteristic: BluetoothGattCharacteristic,
-            status: Int
+        override fun onCharacteristicChanged(
+            gatt: BluetoothGatt?,
+            characteristic: BluetoothGattCharacteristic?
         ) {
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                Log.d(TAG, "✅ Écriture réussie")
-            } else {
-                Log.e(TAG, "❌ Erreur d'écriture: $status")
+            characteristic?.value?.let { data ->
+                val scooterData = dataHandler.handleData(data)
+                if (scooterData != null) {
+                    currentScooterData = scooterData
+                    onDataReceived(scooterData)
+                }
             }
         }
     }
 
-    // ========== CONNEXION ==========
-
-    suspend fun connect(address: String): Result<Unit> {
-        return withContext(Dispatchers.Main) {
-            try {
-                Log.i(TAG, "🔌 Connexion à $address...")
-                onStateChange(ConnectionState.CONNECTING)
-
-                val device = context.getSystemService(Context.BLUETOOTH_SERVICE)
-                    .let { it as android.bluetooth.BluetoothManager }
-                    .adapter
-                    .getRemoteDevice(address)
-
-                bluetoothGatt = device.connectGatt(context, false, gattCallback)
-
-                Result.success(Unit)
-            } catch (e: Exception) {
-                Log.e(TAG, "❌ Erreur connexion", e)
-                onStateChange(ConnectionState.ERROR)
-                Result.failure(e)
-            }
+    // Connexion
+    fun connect(device: BluetoothDevice): Result<Unit> {
+        return try {
+            Log.i(TAG, "🔗 Connexion à ${device.name} (${device.address})")
+            onStateChange(ConnectionState.CONNECTING)
+            bluetoothGatt = device.connectGatt(context, false, gattCallback)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erreur connexion", e)
+            Result.failure(e)
         }
     }
 
-    suspend fun connect(device: BluetoothDevice): Result<Unit> {
-        return connect(device.address)
-    }
-
+    // Déconnexion
     fun disconnect(): Result<Unit> {
         Log.i(TAG, "🔌 Déconnexion...")
         stopPolling()
@@ -203,9 +131,13 @@ class BluetoothConnector(
         return Result.success(Unit)
     }
 
-    // ========== NOTIFICATIONS ==========
+    // Configuration des caractéristiques
+    private fun setupCharacteristics() {
+        val service = bluetoothGatt?.getService(SERVICE_UUID)
 
-    private fun enableNotifications() {
+        writeCharacteristic = service?.getCharacteristic(TX_CHAR_UUID)
+        readCharacteristic = service?.getCharacteristic(RX_CHAR_UUID)
+
         readCharacteristic?.let { char ->
             bluetoothGatt?.setCharacteristicNotification(char, true)
 
@@ -215,39 +147,29 @@ class BluetoothConnector(
         }
     }
 
-    // ========== INITIALISATION ==========
-
+    // Initialisation
     private suspend fun startInitSequence() {
         Log.i(TAG, "🚀 Séquence d'initialisation...")
 
-        // Envoyer toutes les commandes d'init
-        val initCommands = CommandBuilder.getInitSequence()
-
-        for (command in initCommands) {
-            sendCommand(command)
-            delay(INIT_SEQUENCE_DELAY_MS)
-        }
+        sendCommand(CMD_INIT_1)
+        delay(INIT_SEQUENCE_DELAY_MS)
 
         Log.i(TAG, "✅ Initialisation terminée")
-
-        // Démarrer le polling
         startPolling()
     }
 
-    // ========== POLLING ==========
-
+    // Polling
     private fun startPolling() {
         if (isPolling) return
 
         isPolling = true
-        Log.i(TAG, "🔄 Démarrage du polling (${POLLING_INTERVAL_MS}ms)")
+        Log.i(TAG, "🔄 Démarrage du polling")
 
         pollingRunnable = object : Runnable {
             override fun run() {
                 if (isPolling) {
                     scope.launch {
-                        val keepAlive = CommandBuilder.buildKeepAliveCommand()
-                        sendCommand(keepAlive)
+                        sendCommand(CMD_KEEP_ALIVE)
                     }
                     handler.postDelayed(this, POLLING_INTERVAL_MS)
                 }
@@ -259,27 +181,20 @@ class BluetoothConnector(
 
     private fun stopPolling() {
         if (!isPolling) return
-
         isPolling = false
         pollingRunnable?.let { handler.removeCallbacks(it) }
         pollingRunnable = null
         Log.i(TAG, "⏸️ Polling arrêté")
     }
 
-    // ========== ENVOI DE COMMANDES ==========
-
+    // Envoi de commande
     suspend fun sendCommand(command: ByteArray): Result<Unit> {
         val hex = command.joinToString(" ") { "%02X".format(it) }
         Log.d(TAG, "📤 Envoi: $hex")
 
-        if (writeCharacteristic == null) {
-            Log.e(TAG, "❌ writeCharacteristic est NULL")
-            return Result.failure(Exception("writeCharacteristic null"))
-        }
-
-        if (bluetoothGatt == null) {
-            Log.e(TAG, "❌ bluetoothGatt est NULL")
-            return Result.failure(Exception("bluetoothGatt null"))
+        if (writeCharacteristic == null || bluetoothGatt == null) {
+            Log.e(TAG, "❌ Characteristic ou GATT null")
+            return Result.failure(Exception("Not connected"))
         }
 
         return withContext(Dispatchers.IO) {
@@ -290,7 +205,7 @@ class BluetoothConnector(
                 if (success == true) {
                     Result.success(Unit)
                 } else {
-                    Result.failure(Exception("writeCharacteristic a échoué"))
+                    Result.failure(Exception("Write failed"))
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Exception dans sendCommand", e)
@@ -299,84 +214,70 @@ class BluetoothConnector(
         }
     }
 
-    // ========== COMMANDES DE CONTRÔLE ==========
-
-    /**
-     * Met à jour les données actuelles (appelée automatiquement lors de la réception)
-     */
+    // Commandes de contrôle simplifiées
     fun updateCurrentData(data: ScooterData) {
         currentScooterData = data
     }
 
-    /**
-     * Active/désactive le néon
-     */
     fun setNeon(enabled: Boolean) {
-        Log.i(TAG, "🎨 Commande: Néon ${if (enabled) "ON" else "OFF"}")
+        Log.i(TAG, "🎨 Néon ${if (enabled) "ON" else "OFF"}")
 
-        val command = CommandBuilder.buildToggleNeonCommand(
-            neonOn = enabled,
-            currentData = currentScooterData
-        )
+        // Commande néon (exemple - à adapter selon tes tests)
+        val command = if (enabled) {
+            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xC5.toByte(), 0x35, 0x37, 0x79, 0xCA.toByte())
+        } else {
+            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xC5.toByte(), 0x34, 0x37, 0x78, 0xCA.toByte())
+        }
 
         scope.launch {
             sendCommand(command)
         }
     }
 
-    /**
-     * Active/désactive les lumières
-     */
     fun setLights(enabled: Boolean) {
-        Log.i(TAG, "💡 Commande: Lumières ${if (enabled) "ON" else "OFF"}")
+        Log.i(TAG, "💡 Lumières ${if (enabled) "ON" else "OFF"}")
 
-        val command = CommandBuilder.buildToggleLightsCommand(
-            lightsOn = enabled,
-            currentData = currentScooterData
-        )
+        // C6-35 = ON, C6-34 = OFF
+        val command = if (enabled) {
+            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xC6.toByte(), 0x35, 0x34, 0xD1.toByte(), 0xCA.toByte())
+        } else {
+            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xC6.toByte(), 0x34, 0x34, 0xD2.toByte(), 0xCA.toByte())
+        }
 
         scope.launch {
             sendCommand(command)
         }
     }
 
-    /**
-     * Active/désactive le débridage
-     */
     fun setUnlocked(unlocked: Boolean) {
-        Log.i(TAG, "🔓 Commande: ${if (unlocked) "DÉBRIDAGE" else "BRIDAGE"}")
+        Log.i(TAG, "🔓 ${if (unlocked) "DÉBRIDAGE" else "BRIDAGE"}")
 
-        val command = CommandBuilder.buildToggleUnlockCommand(
-            unlocked = unlocked,
-            currentData = currentScooterData
-        )
+        // Commande débridage (à définir selon tes tests)
+        val command = if (unlocked) {
+            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xD0.toByte(), 0x35, 0x37, 0x87.toByte(), 0xCA.toByte())
+        } else {
+            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xD0.toByte(), 0x34, 0x37, 0x86.toByte(), 0xCA.toByte())
+        }
 
         scope.launch {
             sendCommand(command)
         }
     }
 
-    /**
-     * Change le mode de conduite
-     */
     fun setRideMode(mode: RideMode) {
-        Log.i(TAG, "🏍️ Commande: Mode → $mode")
+        Log.i(TAG, "🏍️ Mode → $mode")
 
-        // Mettre à jour localement d'abord
         currentScooterData = currentScooterData.copy(currentMode = mode)
 
-        val command = CommandBuilder.buildChangeModeCommand(
-            mode = mode,
-            currentData = currentScooterData
-        )
+        // 4A-36 = SPORT
+        val command = byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4A, 0x36, 0x34, 0x6D, 0xCB.toByte())
 
         scope.launch {
             sendCommand(command)
         }
     }
 
-    // ========== NETTOYAGE ==========
-
+    // Nettoyage
     fun cleanup() {
         stopPolling()
         scope.cancel()

@@ -26,7 +26,7 @@ fun CompactDataScreen(
     scooterData: ScooterData,
     connectionState: ConnectionState
 ) {
-    val scope = rememberCoroutineScope()
+    val scope = rememberCoroutineScope()  // ✅ AJOUTÉ
     val connector = bluetoothManager.connector
 
     Column(
@@ -139,7 +139,7 @@ fun CompactDataScreen(
             }
         }
 
-        // Boutons de contrôle - CORRIGÉS
+        // Boutons de contrôle - ✅ CORRIGÉS avec scope.launch
         Card(
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -157,7 +157,7 @@ fun CompactDataScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // PHARES (Lock icon = Phares OFF découvert)
+                    // PHARES - ✅ Avec scope.launch
                     ControlButton(
                         icon = Icons.Default.Lock,
                         label = "Phares",
@@ -165,10 +165,12 @@ fun CompactDataScreen(
                         enabled = connectionState == ConnectionState.CONNECTED,
                         modifier = Modifier.weight(1f)
                     ) {
-                        connector?.setLights(!scooterData.headlightsOn)
+                        scope.launch {  // ✅ CORRIGÉ
+                            connector?.setLights(!scooterData.headlightsOn)
+                        }
                     }
 
-                    // NÉON (Éclair = Phares ON découvert, donc néon)
+                    // NÉON - ✅ Avec scope.launch
                     ControlButton(
                         icon = Icons.Default.Star,
                         label = "Néon",
@@ -176,7 +178,9 @@ fun CompactDataScreen(
                         enabled = connectionState == ConnectionState.CONNECTED,
                         modifier = Modifier.weight(1f)
                     ) {
-                        connector?.setNeon(!scooterData.neonOn)
+                        scope.launch {  // ✅ CORRIGÉ
+                            connector?.setNeon(!scooterData.neonOn)
+                        }
                     }
                 }
             }

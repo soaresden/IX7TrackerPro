@@ -1,52 +1,57 @@
 package com.ix7.tracker.bluetooth
 
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.util.Log
-import com.ix7.tracker.core.*
+import com.ix7.tracker.core.BluetoothDeviceInfo
+import com.ix7.tracker.core.ConnectionState
+import com.ix7.tracker.core.ScooterData
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
-class BluetoothManagerImpl(
-    private val context: Context
-) : BluetoothRepository {
+/**
+ * Implémentation du BluetoothRepository
+ * VERSION CORRIGÉE - Types compatibles
+ */
+class BluetoothManagerImpl(private val context: Context) : BluetoothRepository {
 
     companion object {
-        private const val TAG = "BluetoothManager"
+        private const val TAG = "BT_MANAGER"
     }
 
-    // States
+    // États
     private val _discoveredDevices = MutableStateFlow<List<BluetoothDeviceInfo>>(emptyList())
-    override val discoveredDevices: StateFlow<List<BluetoothDeviceInfo>> = _discoveredDevices
-
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
-    override val connectionState: StateFlow<ConnectionState> = _connectionState
-
     private val _scooterData = MutableStateFlow(ScooterData())
-    override val scooterData: StateFlow<ScooterData> = _scooterData
-
     private val _isScanning = MutableStateFlow(false)
-    override val isScanning: StateFlow<Boolean> = _isScanning
 
-    // Components
-    private val scanner = BluetoothScanner(context) { devices ->
-        _discoveredDevices.value = devices
-    }
+    override val discoveredDevices: StateFlow<List<BluetoothDeviceInfo>> = _discoveredDevices.asStateFlow()
+    override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
+    override val scooterData: StateFlow<ScooterData> = _scooterData.asStateFlow()
+    override val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
 
-    // ✅ BluetoothConnector gère tout en interne (dataHandler, etc.)
+    // Scanner
+    private val scanner = BluetoothScanner(
+        context = context,
+        onDevicesFound = { devices ->
+            _discoveredDevices.value = devices
+        }
+    )
+
+    // Connector
     private val _connector = BluetoothConnector(
         context = context,
         onDataReceived = { scooterData ->
-            // Recevoir les données décodées du connector
             _scooterData.value = scooterData
-            Log.d(TAG, "Données mises à jour: ${scooterData.speed}km/h ${scooterData.battery}%")
+            Log.d(TAG, "Données: ${scooterData.speed}km/h ${scooterData.battery}%")
         },
         onStateChange = { state ->
             _connectionState.value = state
         }
     )
 
-    // ✅ Exposer le connector
     override val connector: BluetoothConnector = _connector
 
     // Scan
@@ -70,18 +75,30 @@ class BluetoothManagerImpl(
         return Result.success(Unit)
     }
 
-    // Connexion
+    // Connexion - CORRIGÉ
     override suspend fun connectToDevice(address: String): Result<Unit> {
         stopScan()
-        return _connector.connect(address)
+
+        // Convertir l'adresse en BluetoothDevice
+        return try {
+            val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+            val device = bluetoothAdapter.getRemoteDevice(address)
+            _connector.connect(device)
+        } catch (e: Exception) {
+            Log.e(TAG, "Erreur conversion address -> device", e)
+            Result.failure(e)
+        }
     }
 
     override suspend fun connect(device: BluetoothDevice): Result<Unit> {
-        return connectToDevice(device.address)
+        stopScan()
+        return _connector.connect(device)
     }
 
     override suspend fun disconnect(): Result<Unit> {
-        return _connector.disconnect()
+        // CORRIGÉ - disconnect retourne maintenant Result<Unit>
+        _connector.disconnect()
+        return Result.success(Unit)
     }
 
     // Commandes
