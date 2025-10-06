@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ix7.tracker.ui.screens.SpeedUnit
+import com.ix7.tracker.core.SpeedUnit
 
 @Composable
 fun SpeedCounter(

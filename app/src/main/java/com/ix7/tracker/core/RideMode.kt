@@ -1,4 +1,8 @@
 package com.ix7.tracker.core
 
-class RideMode {
+enum class RideMode(val emoji: String, val label: String) {
+    PEDESTRIAN("🚶", "Piéton"),
+    ECO("🌱", "Eco"),
+    RACE("🏎️", "Race"),
+    SPORT("🔥", "Sport")
 }

@@ -1,4 +1,5 @@
 package com.ix7.tracker.core
 
-class SpeedUnit {
+enum class SpeedUnit {
+    KMH, MPH
 }

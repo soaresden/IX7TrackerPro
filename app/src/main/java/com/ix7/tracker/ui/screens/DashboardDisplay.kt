@@ -13,7 +13,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ix7.tracker.core.ScooterData
-
+import com.ix7.tracker.core.RideMode
+import com.ix7.tracker.core.WheelMode
+import com.ix7.tracker.core.SpeedUnit
+import com.ix7.tracker.core.SpeedLimits
 @Composable
 fun DashboardDisplay(
     scooterData: ScooterData,
@@ -40,10 +43,10 @@ fun DashboardDisplay(
                 // Mode à gauche
                 Text(
                     text = when(scooterData.currentMode) {
+                        RideMode.PEDESTRIAN -> "PIETON"
                         RideMode.ECO -> "ECO"
                         RideMode.RACE -> "RACE"
-                        RideMode.PEDESTRIAN -> "PEDES"
-                        RideMode.POWER -> "POWER"
+                        RideMode.SPORT -> "SPORT"
                     },
                     color = lcdBlue,
                     fontSize = 14.sp,

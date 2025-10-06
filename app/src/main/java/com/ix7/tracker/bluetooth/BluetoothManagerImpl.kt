@@ -42,11 +42,15 @@ class BluetoothManagerImpl(
         Log.d(TAG, "Données mises à jour: ${data.speed} km/h, ${data.battery}%")
     }
 
-    private val connector = BluetoothConnector(
+    private val _connector = BluetoothConnector(
         context = context,
         onStateChange = { state -> _connectionState.value = state },
         onDataDecoded = { data -> dataHandler.handleData(data) }
     )
+
+    // AJOUTER CETTE LIGNE
+    override val connector: BluetoothConnector = _connector
+
 
     // Scan
     override suspend fun startScan(): Result<Unit> {
@@ -72,7 +76,7 @@ class BluetoothManagerImpl(
     // Connexion
     override suspend fun connectToDevice(address: String): Result<Unit> {
         stopScan()
-        return connector.connect(address) { data ->
+        return _connector.connect(address) { data ->
             dataHandler.handleData(data)
         }
     }
@@ -83,20 +87,15 @@ class BluetoothManagerImpl(
     }
 
     override suspend fun disconnect(): Result<Unit> {
-        return connector.disconnect()
+        return _connector.disconnect()
     }
 
     // Commandes
-    override suspend fun unlockScooter(): Result<Unit> {
-        Log.i(TAG, "Unlock scooter")
-        return connector.sendCommand(
-            com.ix7.tracker.protocol.CommandBuilder.buildUnlockCommand()
-        )
+    override suspend fun sendCommand(command: ByteArray): Result<Unit> {
+        return _connector.sendCommand(command)
     }
 
-    override suspend fun sendCommand(command: ByteArray): Result<Unit> {
-        return connector.sendCommand(command)
-    }
+
 
     // Lifecycle
     override fun initialize(): Result<Unit> {
@@ -105,7 +104,7 @@ class BluetoothManagerImpl(
 
     override fun cleanup() {
         scanner.cleanup()
-        connector.cleanup()
+        _connector.cleanup()
         Log.i(TAG, "Cleanup terminé")
     }
 

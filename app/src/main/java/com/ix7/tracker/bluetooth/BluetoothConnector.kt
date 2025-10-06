@@ -11,6 +11,7 @@ import java.util.*
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.ix7.tracker.core.RideMode
 
 data class HoverboardData(
     val speed: Float = 0f,
@@ -153,6 +154,19 @@ class BluetoothConnector(
                 }
 
                 onDataReceived?.invoke(data)
+
+
+                // Mettre à jour les données pour les commandes
+                ProtocolDecoder.decode(data)?.let { hoverData ->
+                    // Convertir en ScooterData si nécessaire
+                    val scooterData = com.ix7.tracker.core.ScooterData(
+                        headlightsOn = hoverData.headlightsOn,
+                        neonOn = hoverData.neonOn,
+                        isLocked = false // À adapter selon ton décodage
+                    )
+                    updateCurrentData(scooterData)
+                }
+
                 onDataDecoded(data)
             }
         }
@@ -375,5 +389,86 @@ class BluetoothConnector(
         bluetoothGatt?.close()
         bluetoothGatt = null
         Log.d(TAG, "🧹 Nettoyage terminé")
+    }
+
+// ========== AJOUTE CES FONCTIONS DANS BluetoothConnector.kt ==========
+
+    private var currentScooterData = com.ix7.tracker.core.ScooterData()
+
+    /**
+     * Met à jour les données actuelles (appelée automatiquement lors de la réception)
+     */
+    fun updateCurrentData(data: com.ix7.tracker.core.ScooterData) {
+        currentScooterData = data
+    }
+
+    /**
+     * Active/désactive le néon
+     */
+    fun setNeon(enabled: Boolean) {
+        android.util.Log.i(TAG, "🎨 Commande: Néon ${if (enabled) "ON" else "OFF"}")
+
+        val command = com.ix7.tracker.protocol.CommandBuilder.buildToggleNeonCommand(
+            neonOn = enabled,
+            currentData = currentScooterData
+        )
+
+        scope.launch {
+            sendCommand(command)
+        }
+    }
+
+    /**
+     * Active/désactive les lumières
+     */
+    fun setLights(enabled: Boolean) {
+        android.util.Log.i(TAG, "💡 Commande: Lumières ${if (enabled) "ON" else "OFF"}")
+
+        val command = com.ix7.tracker.protocol.CommandBuilder.buildToggleLightsCommand(
+            lightsOn = enabled,
+            currentData = currentScooterData
+        )
+
+        scope.launch {
+            sendCommand(command)
+        }
+    }
+
+    /**
+     * Active/désactive le débridage
+     */
+    fun setUnlocked(unlocked: Boolean) {
+        android.util.Log.i(TAG, "🔓 Commande: ${if (unlocked) "DÉBRIDAGE" else "BRIDAGE"}")
+
+        val command = com.ix7.tracker.protocol.CommandBuilder.buildToggleUnlockCommand(
+            unlocked = unlocked,
+            currentData = currentScooterData
+        )
+
+        scope.launch {
+            sendCommand(command)
+        }
+    }
+
+    /**
+     * Change le mode de conduite
+     */
+    /**
+     * Change le mode de conduite
+     */
+    fun setRideMode(mode: com.ix7.tracker.core.RideMode) {
+        android.util.Log.i(TAG, "🏍️ Commande: Mode → $mode")
+
+        // Mettre à jour localement d'abord
+        currentScooterData = currentScooterData.copy(currentMode = mode)
+
+        val command = com.ix7.tracker.protocol.CommandBuilder.buildChangeModeCommand(
+            mode = mode,
+            currentData = currentScooterData
+        )
+
+        scope.launch {
+            sendCommand(command)
+        }
     }
 }

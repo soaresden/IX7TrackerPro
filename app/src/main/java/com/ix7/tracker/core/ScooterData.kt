@@ -1,6 +1,6 @@
 package com.ix7.tracker.core
 
-import com.ix7.tracker.ui.screens.RideMode
+import com.ix7.tracker.core.RideMode
 import java.util.Date
 
 data class ScooterData(

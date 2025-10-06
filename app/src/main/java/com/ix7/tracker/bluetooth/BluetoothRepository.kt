@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
  */
 interface BluetoothRepository {
 
+    val connector: BluetoothConnector? // Ajoute ça
     // États observables
     val discoveredDevices: StateFlow<List<BluetoothDeviceInfo>>
     val connectionState: StateFlow<ConnectionState>
@@ -26,7 +27,6 @@ interface BluetoothRepository {
     suspend fun disconnect(): Result<Unit>
 
     // Commandes
-    suspend fun unlockScooter(): Result<Unit>
     suspend fun sendCommand(command: ByteArray): Result<Unit>
 
     // Gestion du cycle de vie
