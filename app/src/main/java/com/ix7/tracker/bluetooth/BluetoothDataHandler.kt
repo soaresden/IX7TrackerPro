@@ -1,225 +1,325 @@
 package com.ix7.tracker.bluetooth
 
 import android.util.Log
-import com.ix7.tracker.core.ScooterData
 import com.ix7.tracker.core.RideMode
+import com.ix7.tracker.core.ScooterData
+import com.ix7.tracker.protocol.ProtocolConstants
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
-class BluetoothDataHandler(
-    private val onDataParsed: (ScooterData) -> Unit
-) {
+/**
+ * Handler pour décoder toutes les trames du protocole 61 9E
+ */
+class BluetoothDataHandler {
+
     companion object {
-        private const val TAG = "BLE"
-        private const val ENABLE_DETAILED_LOGS = true
-
-        private const val HEADER_1: Byte = 0x61
-        private const val HEADER_2: Byte = 0x9E.toByte()
-
-        private const val TYPE_TELEMETRY: Byte = 0x3E
-        private const val TYPE_BATTERY: Byte = 0x32
-        private const val TYPE_MODE: Byte = 0x30
-
-        private const val SIZE_TELEMETRY = 16
-        private const val SIZE_BATTERY = 12
-        private const val SIZE_MODE = 10
+        private const val TAG = "BLE_DATA"
+        private val buffer = mutableListOf<Byte>()
+        private var frameCount = 0
     }
 
-    private val frameBuffer = mutableListOf<Byte>()
-    private var currentData = ScooterData()
+    /**
+     * Traite les données brutes reçues du scooter
+     */
+    fun handleData(data: ByteArray): ScooterData? {
+        frameCount++
 
-    fun handleData(data: ByteArray) {
-        try {
-            if (ENABLE_DETAILED_LOGS) {
-                val hex = data.joinToString(" ") { "%02X".format(it) }
-                Log.e(TAG, "[RX] SIZE:${data.size} $hex")
-            }
+        // Log brut
+        val hex = data.joinToString(" ") { "%02X".format(it) }
+        Log.d(TAG, "📥 [$frameCount] RAW(${data.size}): $hex")
 
-            if (data.size >= 3 && data[0] == HEADER_1 && data[1] == HEADER_2) {
-                parse61Frame(data)
-                return
-            }
+        // Ajouter au buffer
+        buffer.addAll(data.toList())
 
-            frameBuffer.addAll(data.toList())
-            processBuffer()
-
-            if (frameBuffer.size > 100) {
-                frameBuffer.clear()
-            }
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Erreur: ${e.message}")
-        }
+        // Chercher et traiter les trames complètes
+        return processBuffer()
     }
 
-    private fun processBuffer() {
-        while (frameBuffer.size >= 10) {
-            val headerIndex = findHeaderIndex()
+    /**
+     * Traite le buffer pour extraire les trames complètes
+     */
+    private fun processBuffer(): ScooterData? {
+        var result: ScooterData? = null
+
+        while (buffer.size >= 3) {
+            // Chercher le header 61 9E
+            val headerIndex = findHeader()
+
             if (headerIndex == -1) {
-                frameBuffer.clear()
-                return
+                // Pas de header trouvé, vider le buffer
+                buffer.clear()
+                break
             }
 
+            // Retirer les bytes avant le header
             if (headerIndex > 0) {
-                repeat(headerIndex) { frameBuffer.removeAt(0) }
+                repeat(headerIndex) { buffer.removeAt(0) }
             }
 
-            if (frameBuffer.size < 3) return
+            // Vérifier qu'on a assez de bytes pour le type
+            if (buffer.size < 3) break
 
-            val type = frameBuffer[2]
-            val expectedSize = when (type) {
-                TYPE_TELEMETRY -> SIZE_TELEMETRY
-                TYPE_BATTERY -> SIZE_BATTERY
-                TYPE_MODE -> SIZE_MODE
-                else -> {
-                    frameBuffer.removeAt(0)
-                    return
+            val frameType = buffer[2]
+
+            // Déterminer la taille attendue selon le type
+            val expectedSize = getExpectedFrameSize(frameType)
+
+            if (expectedSize == -1) {
+                // Type inconnu, passer au prochain byte
+                buffer.removeAt(0)
+                continue
+            }
+
+            // Attendre d'avoir assez de bytes
+            if (buffer.size < expectedSize) break
+
+            // Extraire la trame
+            val frame = buffer.take(expectedSize).toByteArray()
+
+            // Vérifier le checksum
+            if (ProtocolConstants.verifyChecksum(frame)) {
+                // Traiter la trame
+                val parsedData = parseFrame(frame)
+                if (parsedData != null) {
+                    result = parsedData
                 }
+            } else {
+                Log.w(TAG, "❌ Checksum invalide pour trame type 0x${"%02X".format(frameType)}")
             }
 
-            if (frameBuffer.size < expectedSize) return
-
-            val frame = frameBuffer.take(expectedSize).toByteArray()
-            repeat(expectedSize) { frameBuffer.removeAt(0) }
-
-            parse61Frame(frame)
+            // Retirer la trame traitée du buffer
+            repeat(expectedSize) { buffer.removeAt(0) }
         }
+
+        // Limiter la taille du buffer
+        if (buffer.size > 200) {
+            Log.w(TAG, "⚠️ Buffer trop grand (${buffer.size}), réinitialisation")
+            buffer.clear()
+        }
+
+        return result
     }
 
-    private fun findHeaderIndex(): Int {
-        for (i in 0 until frameBuffer.size - 1) {
-            if (frameBuffer[i] == HEADER_1 && frameBuffer[i + 1] == HEADER_2) {
+    /**
+     * Trouve l'index du header 61 9E dans le buffer
+     */
+    private fun findHeader(): Int {
+        for (i in 0 until buffer.size - 1) {
+            if (buffer[i] == ProtocolConstants.HEADER_1 &&
+                buffer[i + 1] == ProtocolConstants.HEADER_2) {
                 return i
             }
         }
         return -1
     }
 
-    private fun parse61Frame(frame: ByteArray) {
-        if (frame.size < 3) return
-
-        val type = frame[2]
-
-        if (ENABLE_DETAILED_LOGS) {
-            val typeName = when (type) {
-                TYPE_TELEMETRY -> "TELEMETRY"
-                TYPE_BATTERY -> "BATTERY"
-                TYPE_MODE -> "MODE"
-                else -> "UNKNOWN"
-            }
-            val hex = frame.joinToString(" ") { "%02X".format(it) }
-            Log.e(TAG, "[$typeName] $hex")
+    /**
+     * Retourne la taille attendue d'une trame selon son type
+     */
+    private fun getExpectedFrameSize(frameType: Byte): Int {
+        return when (frameType) {
+            ProtocolConstants.FRAME_STATUS -> 10       // 0x30
+            ProtocolConstants.FRAME_TEMP -> 12         // 0x32
+            ProtocolConstants.FRAME_REALTIME -> 16     // 0x3E
+            ProtocolConstants.FRAME_SPECIAL_2 -> 20    // 0x3A
+            ProtocolConstants.FRAME_SPECIAL_1 -> 19    // 0x38
+            ProtocolConstants.FRAME_SPECIAL_3 -> 18    // 0x3C
+            ProtocolConstants.FRAME_COMBINED -> 47     // 0x16
+            ProtocolConstants.FRAME_INFO_EXT -> 24     // 0x26
+            ProtocolConstants.FRAME_DETAILED -> 49     // 0x1A
+            ProtocolConstants.FRAME_EXTENDED -> 51     // 0x04
+            ProtocolConstants.FRAME_INIT -> 67         // 0x02
+            ProtocolConstants.FRAME_INFO -> 40         // 0x00 (variable)
+            else -> -1 // Type inconnu
         }
-
-        when (type) {
-            TYPE_TELEMETRY -> if (frame.size == SIZE_TELEMETRY) decodeTelemetry(frame)
-            TYPE_BATTERY -> if (frame.size == SIZE_BATTERY) decodeBattery(frame)
-            TYPE_MODE -> if (frame.size == SIZE_MODE) decodeMode(frame)
-        }
-
-        onDataParsed(currentData)
     }
 
-    private fun decodeTelemetry(frame: ByteArray) {
-        val subType = frame[5].toInt() and 0xFF
+    /**
+     * Parse une trame complète selon son type
+     */
+    private fun parseFrame(frame: ByteArray): ScooterData? {
+        val frameType = frame[2]
+        val hex = frame.joinToString(" ") { "%02X".format(it) }
 
-        when (subType) {
-            0xDE -> {
-                currentData = currentData.copy(speed = 0f)
-            }
+        Log.i(TAG, "🔍 Parse trame type 0x${"%02X".format(frameType)} (${frame.size} bytes)")
 
-            0xDA -> {
-                val byte8 = frame[8].toInt() and 0xFF
-                val byte9 = frame[9].toInt() and 0xFF
-
-                val rawSpeed = (byte8 shl 8) or byte9
-                val speed = rawSpeed / 100.0f
-
-                if (speed in 0f..50f) {
-                    currentData = currentData.copy(speed = speed)
-                    if (ENABLE_DETAILED_LOGS) {
-                        Log.d(TAG, "⚡ Vitesse: $speed km/h")
-                    }
-                }
+        return when (frameType) {
+            ProtocolConstants.FRAME_REALTIME -> parseRealtimeFrame(frame)
+            ProtocolConstants.FRAME_STATUS -> parseStatusFrame(frame)
+            ProtocolConstants.FRAME_TEMP -> parseTempFrame(frame)
+            ProtocolConstants.FRAME_INIT -> parseInitFrame(frame)
+            ProtocolConstants.FRAME_EXTENDED -> parseExtendedFrame(frame)
+            ProtocolConstants.FRAME_DETAILED -> parseDetailedFrame(frame)
+            ProtocolConstants.FRAME_COMBINED -> parseCombinedFrame(frame)
+            else -> {
+                Log.d(TAG, "   Type 0x${"%02X".format(frameType)}: $hex")
+                null
             }
         }
     }
 
-    private fun decodeBattery(frame: ByteArray) {
-        val temp = frame[5].toInt() and 0xFF
-        val battHigh = frame[6].toInt() and 0xFF
-        val battLow = frame[7].toInt() and 0xFF
+    /**
+     * Parse trame 0x3E - Temps réel (vitesse, batterie)
+     * Format: 61 9E 3E 17 35 DA C3 34 9E 37 14 30 8B 36 6E C8
+     */
+    private fun parseRealtimeFrame(frame: ByteArray): ScooterData {
+        // Bytes 5-6 : Vitesse (little endian, km/h * 10)
+        val speedRaw = ((frame[6].toInt() and 0xFF) shl 8) or (frame[5].toInt() and 0xFF)
+        val speed = speedRaw / 10.0f
 
-        val battRaw = (battHigh shl 8) or battLow
-        val batteryPercent = (battRaw / 1000.0f).coerceIn(0f, 100f)
+        // Byte 7 : Batterie (pourcentage)
+        val battery = (frame[7].toInt() and 0xFF).toFloat()
 
-        currentData = currentData.copy(
-            battery = batteryPercent,
-            temperature = temp.toFloat()
+        Log.i(TAG, "   ⚡ Vitesse: ${speed}km/h  🔋 Batterie: ${battery}%")
+
+        return ScooterData(
+            speed = speed,
+            battery = battery
         )
-
-        if (ENABLE_DETAILED_LOGS) {
-            Log.d(TAG, "🔋 Batterie: ${batteryPercent.toInt()}% Temp: ${temp}°C")
-        }
     }
 
     /**
-     * Décode MODE (0x30) - États (néon, lumières, débridage)
-     *
-     * CORRECTION BASÉE SUR LES LOGS RÉELS:
-     * Byte[5] FLAGS (LOGIQUE INVERSÉE):
-     *   Bit 7: Débridage (1=débridé)
-     *   Bit 1: Néon (0=ON, 1=OFF)  ← INVERSÉ
-     *   Bit 0: Lumières (0=ON, 1=OFF)  ← INVERSÉ
-     *
-     * Byte[6]: MODE (IGNORÉ car change aléatoirement)
+     * Parse trame 0x30 - État/Mode
+     * Format: 61 9E 30 17 35 C3 E1 35 3E CA
      */
-    private fun decodeMode(frame: ByteArray) {
-        val flags = frame[5].toInt() and 0xFF
+    private fun parseStatusFrame(frame: ByteArray): ScooterData {
+        // Byte 6 : Mode actuel
+        val modeId = frame[6]
+        val mode = when (modeId) {
+            0xE1.toByte() -> RideMode.PEDESTRIAN
+            0x34.toByte() -> RideMode.ECO
+            0x35.toByte() -> RideMode.SPORT
+            else -> RideMode.ECO
+        }
 
-        // LOGIQUE INVERSÉE: 0=ON, 1=OFF
-        val isUnlocked = (flags and 0x80) != 0  // Bit 7
-        val neonOn = (flags and 0x02) == 0      // Bit 1 INVERSÉ
-        val lightsOn = (flags and 0x01) == 0    // Bit 0 INVERSÉ
+        Log.i(TAG, "   🏍️ Mode: $mode (byte: 0x${"%02X".format(modeId)})")
 
-        // NE PAS changer le mode de conduite depuis les trames MODE
-        // (byte[6] change aléatoirement, non fiable)
+        return ScooterData(currentMode = mode)
+    }
 
-        val hasChanged = currentData.headlightsOn != lightsOn ||
-                currentData.neonOn != neonOn ||
-                currentData.isLocked != !isUnlocked
+    /**
+     * Parse trame 0x32 - Températures
+     * Format: 61 9E 32 17 35 0B F4 35 A4 35 70 CA
+     */
+    private fun parseTempFrame(frame: ByteArray): ScooterData {
+        // Températures dans les bytes 5-9 (format à confirmer)
+        val temp1 = (frame[5].toInt() and 0xFF).toFloat()
+        val temp2 = (frame[7].toInt() and 0xFF).toFloat()
 
-        if (hasChanged) {
-            if (ENABLE_DETAILED_LOGS) {
-                Log.i(TAG, "═══ ÉTAT CHANGÉ ═══")
-                Log.i(TAG, "🔓 Débridé: ${if (isUnlocked) "OUI" else "NON"}")
-                Log.i(TAG, "💡 Néon: ${if (neonOn) "ON" else "OFF"} [bit=${flags and 0x02}]")
-                Log.i(TAG, "🔦 Lumières: ${if (lightsOn) "ON" else "OFF"} [bit=${flags and 0x01}]")
-                Log.i(TAG, "🏍️ Mode: ${currentData.currentMode} (inchangé)")
-                Log.i(TAG, "═══════════════════")
+        Log.i(TAG, "   🌡️ Températures: T1=${temp1}°C T2=${temp2}°C")
+
+        return ScooterData(temperature = temp1)
+    }
+
+    /**
+     * Parse trame 0x02 - Initialisation
+     * Format: 61 9E 02 17 35 2E FE B0 ... (60 bytes)
+     *
+     * Cette trame contient beaucoup d'informations au démarrage
+     */
+    private fun parseInitFrame(frame: ByteArray): ScooterData? {
+        Log.i(TAG, "   📋 Trame d'initialisation (${frame.size} bytes)")
+
+        // TODO: Analyser le contenu pour extraire les infos utiles
+        // Possiblement : versions firmware, capacité batterie, etc.
+
+        return null
+    }
+
+    /**
+     * Parse trame 0x04 - Données étendues (KILOMÉTRAGE TOTAL ICI !)
+     * Format: 61 9E 04 15 35 20 E1 34 FB 30 78 35 60 67 F2 77 8D EF ... (40+ bytes)
+     *
+     * IMPORTANT: Cette trame contient le KILOMÉTRAGE TOTAL et le TEMPS DE CONDUITE
+     */
+    private fun parseExtendedFrame(frame: ByteArray): ScooterData? {
+        Log.i(TAG, "   📊 Trame étendue - recherche kilométrage...")
+
+        // Le kilométrage est probablement encodé dans les bytes 5-20
+        // Chercher la valeur proche de 41.0 km
+
+        // Tentative 1: Little endian 4 bytes (mètres)
+        for (i in 5 until frame.size - 4) {
+            val value = ByteBuffer.wrap(frame, i, 4)
+                .order(ByteOrder.LITTLE_ENDIAN)
+                .int
+
+            // Chercher une valeur entre 0 et 100000 mètres (0-100 km)
+            if (value in 100..100000) {
+                val km = value / 1000.0f
+                Log.i(TAG, "   🎯 KILOMÉTRAGE TROUVÉ à offset $i: ${km}km (${value}m)")
+                return ScooterData(odometer = km)
+            }
+        }
+
+        // Tentative 2: Little endian 2 bytes (décamètres ou hectomètres)
+        for (i in 5 until frame.size - 2) {
+            val value = ((frame[i+1].toInt() and 0xFF) shl 8) or (frame[i].toInt() and 0xFF)
+
+            // Si c'est en décamètres: 41000m = 4100 décamètres
+            if (value in 100..10000) {
+                val km = value / 100.0f
+                Log.i(TAG, "   🎯 KILOMÉTRAGE TROUVÉ (décam) à offset $i: ${km}km")
+                return ScooterData(odometer = km)
             }
 
-            currentData = currentData.copy(
-                headlightsOn = lightsOn,
-                neonOn = neonOn,
-                isLocked = !isUnlocked
-                // currentMode reste inchangé
-            )
+            // Si c'est directement en km * 10: 41.0km = 410
+            if (value in 10..1000) {
+                val km = value / 10.0f
+                Log.i(TAG, "   🎯 KILOMÉTRAGE TROUVÉ (km*10) à offset $i: ${km}km")
+                return ScooterData(odometer = km)
+            }
         }
+
+        // Log tous les bytes pour analyse manuelle
+        val hex = frame.joinToString(" ") { "%02X".format(it) }
+        Log.w(TAG, "   ⚠️ Kilométrage non trouvé dans: $hex")
+
+        return null
     }
 
     /**
-     * Permet de changer le mode manuellement (depuis les commandes)
+     * Parse trame 0x1A - Données détaillées
+     * Format: 61 9E 1A 17 35 F6 9E 37 ... (40+ bytes)
      */
-    fun setRideMode(mode: RideMode) {
-        currentData = currentData.copy(currentMode = mode)
-        if (ENABLE_DETAILED_LOGS) {
-            Log.i(TAG, "🏍️ Mode changé manuellement: $mode")
-        }
+    private fun parseDetailedFrame(frame: ByteArray): ScooterData? {
+        Log.i(TAG, "   📝 Trame détaillée")
+
+        // Cette trame semble contenir des duplications de données
+        // ou des informations complémentaires
+
+        return null
     }
 
+    /**
+     * Parse trame 0x16 - Combinée
+     * Format: 61 9E 16 17 35 DE ... (47 bytes)
+     *
+     * Cette trame combine plusieurs informations
+     */
+    private fun parseCombinedFrame(frame: ByteArray): ScooterData {
+        // Extraire vitesse et batterie si présents
+        val speedRaw = if (frame.size > 7) {
+            ((frame[6].toInt() and 0xFF) shl 8) or (frame[5].toInt() and 0xFF)
+        } else 0
+        val speed = speedRaw / 10.0f
+
+        val battery = if (frame.size > 7) (frame[7].toInt() and 0xFF).toFloat() else 0f
+
+        Log.i(TAG, "   🔄 Combinée: Speed=${speed}km/h Battery=${battery}%")
+
+        return ScooterData(
+            speed = speed,
+            battery = battery
+        )
+    }
+
+    /**
+     * Réinitialise le buffer
+     */
     fun reset() {
-        frameBuffer.clear()
-        currentData = ScooterData()
+        buffer.clear()
+        frameCount = 0
+        Log.i(TAG, "🔄 Handler réinitialisé")
     }
-
-    fun getCurrentData(): ScooterData = currentData
 }

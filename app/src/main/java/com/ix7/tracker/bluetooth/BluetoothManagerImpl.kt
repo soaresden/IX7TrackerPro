@@ -7,10 +7,6 @@ import com.ix7.tracker.core.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
-/**
- * Implémentation du BluetoothRepository
- * Coordonne Scanner, Connector et DataHandler
- */
 class BluetoothManagerImpl(
     private val context: Context
 ) : BluetoothRepository {
@@ -37,20 +33,21 @@ class BluetoothManagerImpl(
         _discoveredDevices.value = devices
     }
 
-    private val dataHandler = BluetoothDataHandler { data ->
-        _scooterData.value = data
-        Log.d(TAG, "Données mises à jour: ${data.speed} km/h, ${data.battery}%")
-    }
-
+    // ✅ BluetoothConnector gère tout en interne (dataHandler, etc.)
     private val _connector = BluetoothConnector(
         context = context,
-        onStateChange = { state -> _connectionState.value = state },
-        onDataDecoded = { data -> dataHandler.handleData(data) }
+        onDataReceived = { scooterData ->
+            // Recevoir les données décodées du connector
+            _scooterData.value = scooterData
+            Log.d(TAG, "Données mises à jour: ${scooterData.speed}km/h ${scooterData.battery}%")
+        },
+        onStateChange = { state ->
+            _connectionState.value = state
+        }
     )
 
-    // AJOUTER CETTE LIGNE
+    // ✅ Exposer le connector
     override val connector: BluetoothConnector = _connector
-
 
     // Scan
     override suspend fun startScan(): Result<Unit> {
@@ -76,11 +73,8 @@ class BluetoothManagerImpl(
     // Connexion
     override suspend fun connectToDevice(address: String): Result<Unit> {
         stopScan()
-        return _connector.connect(address) { data ->
-            dataHandler.handleData(data)
-        }
+        return _connector.connect(address)
     }
-
 
     override suspend fun connect(device: BluetoothDevice): Result<Unit> {
         return connectToDevice(device.address)
@@ -94,8 +88,6 @@ class BluetoothManagerImpl(
     override suspend fun sendCommand(command: ByteArray): Result<Unit> {
         return _connector.sendCommand(command)
     }
-
-
 
     // Lifecycle
     override fun initialize(): Result<Unit> {

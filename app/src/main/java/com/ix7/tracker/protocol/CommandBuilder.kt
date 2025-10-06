@@ -2,156 +2,221 @@ package com.ix7.tracker.protocol
 
 import android.util.Log
 import com.ix7.tracker.core.RideMode
+import com.ix7.tracker.core.ScooterData
 
 /**
- * Constructeur de commandes pour le protocole 61 9E
- * Permet de contrôler néon, lumières, débridage, modes
+ * Constructeur de commandes pour le protocole 61 9E (iX7 Pro)
+ *
+ * IMPORTANT : Ce protocole est DIFFÉRENT du protocole 55 AA (Xiaomi/Ninebot)
  */
 object CommandBuilder {
     private const val TAG = "CommandBuilder"
 
-    // Headers protocole 61 9E
-    private const val HEADER_1: Byte = 0x61
-    private const val HEADER_2: Byte = 0x9E.toByte()
-    private const val CMD_SET_MODE: Byte = 0x30
+    // ========== COMMANDES PRINCIPALES ==========
 
     /**
-     * Calcule le checksum (XOR de tous les bytes sauf le dernier)
+     * Commande de KEEP-ALIVE / POLLING
+     * À envoyer toutes les 1-2 secondes pour maintenir la connexion
      */
-    private fun calculateChecksum(frame: ByteArray): Byte {
-        var xor: Byte = 0
-        for (i in 0 until frame.size - 1) {
-            xor = (xor.toInt() xor frame[i].toInt()).toByte()
-        }
-        return xor
+    fun buildKeepAliveCommand(): ByteArray {
+        return ProtocolConstants.CMD_KEEP_ALIVE
     }
 
     /**
-     * Construit une commande MODE complète
-     * Format: 61 9E 30 17 35 [FLAGS] [MODE] 34 [?] [CHK]
+     * Séquence d'initialisation complète
+     * Envoie toutes les commandes nécessaires au démarrage
      */
-    fun buildModeCommand(
-        unlocked: Boolean = true,
-        dualWheel: Boolean = false,
-        neonOn: Boolean = true,
-        lightsOn: Boolean = true,
-        modeType: Byte = 0x34.toByte()
-    ): ByteArray {
-        // Byte 5 FLAGS (binaire)
-        var flags: Int = 0x40 // Bit 6 toujours à 1
-
-        if (unlocked) flags = flags or 0x80    // Bit 7: débridage
-        if (dualWheel) flags = flags or 0x08   // Bit 3: 2 roues
-        if (neonOn) flags = flags or 0x02      // Bit 1: néon
-        if (lightsOn) flags = flags or 0x01    // Bit 0: lumières
-
-        val frame = byteArrayOf(
-            HEADER_1,           // 0: 61
-            HEADER_2,           // 1: 9E
-            CMD_SET_MODE,       // 2: 30
-            0x17,               // 3: Constante
-            0x35,               // 4: Constante
-            flags.toByte(),     // 5: FLAGS
-            modeType,           // 6: Mode de conduite
-            0x34,               // 7: Constante
-            0x00,               // 8: Padding
-            0x00                // 9: Checksum (calculé après)
-        )
-
-        frame[9] = calculateChecksum(frame)
-
-        val hex = frame.joinToString(" ") { "%02X".format(it) }
-        Log.d(TAG, "CMD MODE: $hex (Débridé:$unlocked Néon:$neonOn Lumières:$lightsOn)")
-
-        return frame
-    }
-
-    /**
-     * Toggle néon uniquement
-     */
-    fun buildToggleNeonCommand(
-        neonOn: Boolean,
-        currentData: com.ix7.tracker.core.ScooterData
-    ): ByteArray {
-        return buildModeCommand(
-            unlocked = !currentData.isLocked,
-            dualWheel = false,
-            neonOn = neonOn,
-            lightsOn = currentData.headlightsOn,
-            modeType = getModeTypeByte(currentData.currentMode)
+    fun getInitSequence(): List<ByteArray> {
+        return listOf(
+            ProtocolConstants.CMD_KEEP_ALIVE,
+            ProtocolConstants.CMD_REQUEST_1,
+            ProtocolConstants.CMD_REQUEST_2,
+            ProtocolConstants.CMD_REQUEST_3,
+            ProtocolConstants.CMD_REQUEST_4,
+            ProtocolConstants.CMD_REQUEST_5
         )
     }
 
-    /**
-     * Toggle débridage uniquement
-     */
-    fun buildToggleUnlockCommand(
-        unlocked: Boolean,
-        currentData: com.ix7.tracker.core.ScooterData
-    ): ByteArray {
-        return buildModeCommand(
-            unlocked = unlocked,
-            dualWheel = false,
-            neonOn = currentData.neonOn,
-            lightsOn = currentData.headlightsOn,
-            modeType = getModeTypeByte(currentData.currentMode)
-        )
-    }
+    // ========== COMMANDES DE MODES ==========
 
     /**
-     * Toggle lumières uniquement
-     */
-    fun buildToggleLightsCommand(
-        lightsOn: Boolean,
-        currentData: com.ix7.tracker.core.ScooterData
-    ): ByteArray {
-        return buildModeCommand(
-            unlocked = !currentData.isLocked,
-            dualWheel = false,
-            neonOn = currentData.neonOn,
-            lightsOn = lightsOn,
-            modeType = getModeTypeByte(currentData.currentMode)
-        )
-    }
-
-    /**
-     * Change mode de conduite
+     * Change le mode de conduite
+     *
+     * @param mode Le mode souhaité
+     * @param currentData Les données actuelles (pour préserver les autres états)
      */
     fun buildChangeModeCommand(
         mode: RideMode,
-        currentData: com.ix7.tracker.core.ScooterData
+        currentData: ScooterData = ScooterData()
     ): ByteArray {
-        return buildModeCommand(
-            unlocked = !currentData.isLocked,
-            dualWheel = false,
-            neonOn = currentData.neonOn,
-            lightsOn = currentData.headlightsOn,
-            modeType = getModeTypeByte(mode)
-        )
-    }
-
-    /**
-     * Convertit RideMode en byte protocole
-     */
-    private fun getModeTypeByte(mode: RideMode): Byte {
         return when (mode) {
-            RideMode.PEDESTRIAN -> 0xE1.toByte()
-            RideMode.ECO -> 0x34.toByte()
-            RideMode.RACE -> 0x35.toByte()
-            RideMode.SPORT -> 0xB8.toByte()
+            RideMode.PEDESTRIAN -> ProtocolConstants.CMD_MODE_PEDESTRIAN_1
+            RideMode.ECO -> ProtocolConstants.CMD_MODE_ECO_1
+            RideMode.SPORT -> ProtocolConstants.CMD_MODE_SPORT_1
+            RideMode.RACE -> ProtocolConstants.CMD_MODE_RACE_1
         }
     }
 
     /**
-     * Commande de débridage rapide
+     * Construit une commande de mode personnalisée
+     * Format : 61 9E 30 14 37 [MODE] [STATE] [DATA] [CHECKSUM]
      */
-    fun buildUnlockCommand(): ByteArray {
-        return buildModeCommand(
-            unlocked = true,
-            dualWheel = false,
-            neonOn = false,
-            lightsOn = false,
-            modeType = 0x34.toByte()
+    fun buildCustomModeCommand(
+        modeId: Byte,
+        state: Byte = ProtocolConstants.STATE_35
+    ): ByteArray {
+        val command = byteArrayOf(
+            ProtocolConstants.HEADER_1,
+            ProtocolConstants.HEADER_2,
+            ProtocolConstants.CMD_MODE,
+            0x14,
+            0x37,
+            modeId,
+            state,
+            0x34,
+            0x00, // Placeholder
+            0x00  // Checksum (calculé après)
         )
+
+        // Calculer et mettre à jour le checksum
+        command[command.size - 1] = ProtocolConstants.calculateChecksum(command)
+
+        val hex = command.joinToString(" ") { "%02X".format(it) }
+        Log.d(TAG, "🔧 Commande MODE construite: $hex")
+
+        return command
+    }
+
+    // ========== COMMANDES LOCK/UNLOCK ==========
+
+    /**
+     * Active/désactive le verrouillage
+     */
+    fun buildToggleLockCommand(locked: Boolean): ByteArray {
+        return if (locked) {
+            ProtocolConstants.CMD_LOCK_UNLOCK_1
+        } else {
+            ProtocolConstants.CMD_LOCK_UNLOCK_2
+        }
+    }
+
+    // ========== COMMANDES NÉON ET LUMIÈRES (IDENTIFIÉES !) ==========
+
+    /**
+     * Active/désactive le NÉON
+     *
+     * Commandes identifiées dans les logs (envoyées 8 fois = ON/OFF testés)
+     */
+    fun buildToggleNeonCommand(
+        neonOn: Boolean,
+        currentData: ScooterData = ScooterData()
+    ): ByteArray {
+        Log.i(TAG, "🎨 Construction commande NÉON: ${if (neonOn) "ON" else "OFF"}")
+
+        // Commande identifiée : 61 9E 37 14 55 6A 06 DF CA
+        // Cette commande a été envoyée 8 fois pendant les tests
+        return ProtocolConstants.CMD_TOGGLE_NEON
+    }
+
+    /**
+     * Active/désactive les LUMIÈRES
+     *
+     * Commandes identifiées dans les logs (envoyées 8 fois = ON/OFF testés)
+     */
+    fun buildToggleLightsCommand(
+        lightsOn: Boolean,
+        currentData: ScooterData = ScooterData()
+    ): ByteArray {
+        Log.i(TAG, "💡 Construction commande LUMIÈRES: ${if (lightsOn) "ON" else "OFF"}")
+
+        // Commande identifiée : 61 9E 37 14 55 72 06 37 CB
+        // Cette commande a été envoyée 8 fois pendant les tests
+        return ProtocolConstants.CMD_TOGGLE_LIGHTS
+    }
+
+    /**
+     * Commande alternative pour néon/lumières
+     * Peut être utilisée selon le contexte
+     */
+    fun buildToggleLightsModeCommand(enabled: Boolean): ByteArray {
+        // Autre commande identifiée : 61 9E 37 14 55 8F 32 8E CA
+        // Envoyée 8 fois aussi - pourrait être un mode spécial
+        return ProtocolConstants.CMD_TOGGLE_SPECIAL
+    }
+
+    /**
+     * Active/désactive le débridage
+     */
+    fun buildToggleUnlockCommand(
+        unlocked: Boolean,
+        currentData: ScooterData = ScooterData()
+    ): ByteArray {
+        // Les commandes C6 semblent liées au lock/unlock/débridage
+        return buildToggleLockCommand(!unlocked)
+    }
+
+    /**
+     * Active/désactive le régulateur de vitesse (cruise control)
+     *
+     * Identifié dans les logs : commandes avec bytes 48
+     */
+    fun buildToggleCruiseControlCommand(enabled: Boolean): ByteArray {
+        // Commandes identifiées pour le régulateur :
+        // ON  : 61 9E 30 14 37 48 35 34 6F CB
+        // OFF : 61 9E 30 14 37 48 34 34 68 CB
+        return if (enabled) {
+            ProtocolConstants.CMD_CRUISE_CONTROL_ON
+        } else {
+            ProtocolConstants.CMD_CRUISE_CONTROL_OFF
+        }
+    }
+
+    // ========== HELPERS ==========
+
+    /**
+     * Construit une commande personnalisée complète
+     *
+     * @param cmdType Type de commande (byte 3)
+     * @param flags Flags (byte 4)
+     * @param data Données supplémentaires
+     */
+    fun buildCustomCommand(
+        cmdType: Byte,
+        flags: Byte,
+        data: ByteArray
+    ): ByteArray {
+        val command = ByteArray(3 + data.size + 1) // Header + cmd + flags + data + checksum
+        command[0] = ProtocolConstants.HEADER_1
+        command[1] = ProtocolConstants.HEADER_2
+        command[2] = cmdType
+        command[3] = flags
+
+        // Copier les données
+        data.copyInto(command, destinationOffset = 4)
+
+        // Calculer le checksum
+        command[command.size - 1] = ProtocolConstants.calculateChecksum(command)
+
+        return command
+    }
+
+    /**
+     * Convertit RideMode en byte d'identifiant de mode
+     */
+    private fun getModeIdByte(mode: RideMode): Byte {
+        return when (mode) {
+            RideMode.PEDESTRIAN -> ProtocolConstants.MODE_PEDESTRIAN
+            RideMode.ECO -> ProtocolConstants.MODE_ECO
+            RideMode.SPORT -> ProtocolConstants.MODE_SPORT
+            RideMode.RACE -> ProtocolConstants.MODE_RACE
+        }
+    }
+
+    /**
+     * Log une commande en format lisible
+     */
+    fun logCommand(command: ByteArray, label: String) {
+        val hex = command.joinToString(" ") { "%02X".format(it) }
+        Log.d(TAG, "📤 $label: $hex")
     }
 }

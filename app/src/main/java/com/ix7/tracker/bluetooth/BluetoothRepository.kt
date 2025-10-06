@@ -6,11 +6,11 @@ import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Interface pour la gestion Bluetooth (Repository Pattern)
- * Permet de découpler la logique métier de l'implémentation Android
  */
 interface BluetoothRepository {
+    // Composants
+    val connector: BluetoothConnector
 
-    val connector: BluetoothConnector? // Ajoute ça
     // États observables
     val discoveredDevices: StateFlow<List<BluetoothDeviceInfo>>
     val connectionState: StateFlow<ConnectionState>
@@ -37,5 +37,4 @@ interface BluetoothRepository {
     fun isBluetoothEnabled(): Boolean
     fun hasNecessaryPermissions(): Boolean
     fun clearDiscoveredDevices()
-    
 }

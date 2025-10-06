@@ -350,10 +350,16 @@ private fun ActionsPopup(
                         Text("Phares", fontSize = 16.sp)
                     }
                     Switch(
-                        checked = headlights, // Reflète l'état de la trottinette
-                        onCheckedChange = {
+                        checked = headlights,
+                        onCheckedChange = { newValue ->
+                            android.util.Log.e("RideScreen", "🔍 Switch cliqué! Nouvelle valeur: $newValue")
+                            android.util.Log.e("RideScreen", "🔍 bluetoothManager: $bluetoothManager")
+                            android.util.Log.e("RideScreen", "🔍 connector: ${bluetoothManager.connector}")
+
                             scope.launch {
-                                bluetoothManager.connector?.setLights(it)
+                                android.util.Log.e("RideScreen", "🔍 Dans la coroutine!")
+                                bluetoothManager.connector?.setLights(newValue)
+                                android.util.Log.e("RideScreen", "🔍 Après setLights")
                             }
                         }
                     )
