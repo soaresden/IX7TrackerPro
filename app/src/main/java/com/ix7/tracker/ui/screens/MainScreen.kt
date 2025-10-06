@@ -60,7 +60,7 @@ fun MainScreen(
         Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
             when (selectedTab) {
                 0 -> ConnectionScreen(bluetoothManager, discoveredDevices, connectionState, isScanning)
-                1 -> CompactDataScreen(scooterData, connectionState == ConnectionState.CONNECTED)
+                1 -> CompactDataScreen(bluetoothManager, scooterData, connectionState)
                 2 -> RideScreen(scooterData, connectionState == ConnectionState.CONNECTED, bluetoothManager)  // AJOUTE bluetoothManager
                 3 -> LogScreen(logManager)
                 4 -> TestScreen(bluetoothManager, connectionState == ConnectionState.CONNECTED)

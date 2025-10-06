@@ -1,277 +1,254 @@
 package com.ix7.tracker.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ix7.tracker.bluetooth.BluetoothRepository
+import com.ix7.tracker.core.ConnectionState
+import com.ix7.tracker.core.RideMode
 import com.ix7.tracker.core.ScooterData
-
+import kotlinx.coroutines.launch
 
 @Composable
 fun CompactDataScreen(
+    bluetoothManager: BluetoothRepository,
     scooterData: ScooterData,
-    isConnected: Boolean
+    connectionState: ConnectionState
 ) {
+    val scope = rememberCoroutineScope()
+    val connector = bluetoothManager.connector
+
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // État de connexion
-        StatusCard(
-            text = if (isConnected) "🟢 Connecté" else "🔴 Déconnecté",
-            color = if (isConnected) Color(0xFF4CAF50) else Color(0xFFF44336)
-        )
+        // Indicateur de connexion
+        if (connectionState != ConnectionState.CONNECTED) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Text(
+                    text = "Non connecté",
+                    modifier = Modifier.padding(16.dp),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
 
+        // Vitesse et batterie
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Vitesse
+            Card(
+                modifier = Modifier.weight(1f),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = String.format("%.1f", scooterData.speed),
+                        fontSize = 36.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "km/h",
+                        fontSize = 14.sp
+                    )
+                }
+            }
 
-        // Tableau de bord LCD
-        DashboardDisplay(
-            scooterData = scooterData,
-            modifier = Modifier.padding(horizontal = 8.dp)
-        )
+            // Batterie
+            Card(
+                modifier = Modifier.weight(1f),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = String.format("%.0f%%", scooterData.battery),
+                        fontSize = 36.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Batterie",
+                        fontSize = 14.sp
+                    )
+                }
+            }
+        }
 
-        Spacer(modifier = Modifier.height(8.dp))
-
-// États et indicateurs
+        // Mode actuel
         Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp),
+            modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer
             )
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Phares
-                StateIndicator(
-                    label = "Phares",
-                    isActive = scooterData.headlightsOn,
-                    activeIcon = "💡",
-                    inactiveIcon = "⚫"
+                Text(
+                    text = "Mode actuel",
+                    fontSize = 16.sp
                 )
-
-                // Néon
-                StateIndicator(
-                    label = "Néon",
-                    isActive = scooterData.neonOn,
-                    activeIcon = "🟣",
-                    inactiveIcon = "⚫"
-                )
-
-                // Clignotant gauche
-                StateIndicator(
-                    label = "Cligno G",
-                    isActive = scooterData.leftBlinker,
-                    activeIcon = "⬅️",
-                    inactiveIcon = "⚫"
-                )
-
-                // Clignotant droit
-                StateIndicator(
-                    label = "Cligno D",
-                    isActive = scooterData.rightBlinker,
-                    activeIcon = "➡️",
-                    inactiveIcon = "⚫"
-                )
-            }
-
-            Divider(modifier = Modifier.padding(vertical = 4.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Mode roues (TODO: détecter 2WD)
-                StateIndicator(
-                    label = "Mode",
-                    isActive = false, // TODO: déterminer si 2WD
-                    activeIcon = "🏍️",
-                    inactiveIcon = "🛴"
-                )
-
-                // Régulateur
-                StateIndicator(
-                    label = "Régulateur",
-                    isActive = scooterData.cruiseControl,
-                    activeIcon = "👮",
-                    inactiveIcon = "✖️"
-                )
-
-                // Démarrage zéro
-                StateIndicator(
-                    label = "Start",
-                    isActive = scooterData.zeroStart,
-                    activeIcon = "🐇",
-                    inactiveIcon = "🐢"
+                Text(
+                    text = when (scooterData.currentMode) {
+                        RideMode.PEDESTRIAN -> "PIÉTON"
+                        RideMode.ECO -> "ECO"
+                        RideMode.SPORT -> "SPORT"
+                        RideMode.RACE -> "RACE"
+                        else -> "ECO"
+                    },
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
 
-
-        Spacer(modifier = Modifier.height(8.dp))
-        // Section principale - Données temps réel (2x2)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {}
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            DataCard("⚡ Voltage", "${if (isConnected) scooterData.voltage else 0}V", Color(0xFFFF9800), Modifier.weight(1f))
-            DataCard("🌡️ Temp", "${if (isConnected) scooterData.temperature.toInt() else 0}°C", getTemperatureColor(if (isConnected) scooterData.temperature else 0f), Modifier.weight(1f))
-        }
-
-        // Section électrique (1x2)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            DataCard("🔌 Courant", "${if (isConnected) scooterData.current else 0}A", Color(0xFF00BCD4), Modifier.weight(1f))
-            DataCard("💪 Puissance", "${if (isConnected) scooterData.power.toInt() else 0}W", Color(0xFFE91E63), Modifier.weight(1f))
-        }
-
-        // Section historique (1x2)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            DataCard("📍 Trajet", "${if (isConnected) scooterData.tripDistance else 0}km", Color(0xFF795548), Modifier.weight(1f))
-        }
-
-        // Dernière mise à jour
+        // Boutons de contrôle - CORRIGÉS
         Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF607D8B).copy(alpha = 0.1f))
+            modifier = Modifier.fillMaxWidth()
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "⏱️",
-                    fontSize = 24.sp,
-                    color = Color(0xFF607D8B)
+                    text = "Contrôles",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
                 )
-                Text(
-                    text = "Dernière MAJ",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = if (isConnected && scooterData.lastUpdate != null) {
-                        java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(scooterData.lastUpdate)
-                    } else "--:--:--",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF607D8B)
-                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // PHARES (Lock icon = Phares OFF découvert)
+                    ControlButton(
+                        icon = Icons.Default.Lock,
+                        label = "Phares",
+                        isActive = scooterData.headlightsOn,
+                        enabled = connectionState == ConnectionState.CONNECTED,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        connector?.setLights(!scooterData.headlightsOn)
+                    }
+
+                    // NÉON (Éclair = Phares ON découvert, donc néon)
+                    ControlButton(
+                        icon = Icons.Default.Star,
+                        label = "Néon",
+                        isActive = scooterData.neonOn,
+                        enabled = connectionState == ConnectionState.CONNECTED,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        connector?.setNeon(!scooterData.neonOn)
+                    }
+                }
+            }
+        }
+
+        // Infos supplémentaires
+        Card(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                InfoRow("Température", "${scooterData.temperature}°C")
+                InfoRow("Kilométrage", String.format("%.1f km", scooterData.odometer))
+                InfoRow("Trajet actuel", String.format("%.2f km", scooterData.tripDistance))
             }
         }
     }
 }
 
 @Composable
-private fun StatusCard(text: String, color: Color) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.1f)),
-        modifier = Modifier.fillMaxWidth().height(50.dp)
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = text,
-                fontWeight = FontWeight.Bold,
-                color = color,
-                fontSize = 16.sp,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
-@Composable
-private fun DataCard(title: String, value: String, color: Color, modifier: Modifier = Modifier) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.1f)),
-        modifier = modifier.height(80.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = title,
-                fontSize = 10.sp,
-                color = color,
-                textAlign = TextAlign.Center,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = value,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = color,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
-private fun getBatteryColor(battery: Float): Color {
-    return when {
-        battery > 50f -> Color(0xFF4CAF50)
-        battery > 20f -> Color(0xFFFF9800)
-        else -> Color(0xFFF44336)
-    }
-}
-// Fonction helper
-@Composable
-private fun StateIndicator(
+private fun ControlButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     isActive: Boolean,
-    activeIcon: String,
-    inactiveIcon: String
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
 ) {
     Column(
+        modifier = modifier
+            .background(
+                color = if (isActive) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .clickable(enabled = enabled) { onClick() }
+            .padding(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = if (isActive) activeIcon else inactiveIcon,
-            fontSize = 24.sp
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = if (isActive) MaterialTheme.colorScheme.onPrimary
+            else MaterialTheme.colorScheme.onSurfaceVariant
         )
+        Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = label,
-            fontSize = 9.sp,
-            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-            color = if (isActive) MaterialTheme.colorScheme.primary else Color.Gray
+            fontSize = 12.sp,
+            color = if (isActive) MaterialTheme.colorScheme.onPrimary
+            else MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
-private fun getTemperatureColor(temperature: Float): Color {
-    return when {
-        temperature > 60f -> Color(0xFFF44336)
-        temperature > 45f -> Color(0xFFFF9800)
-        else -> Color(0xFF4CAF50)
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium
+        )
     }
-
-
 }
