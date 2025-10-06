@@ -38,15 +38,20 @@ fun RideScreen(
 ) {
     val scope = rememberCoroutineScope()
 
+    // ÉTATS LOCAUX pour réactivité immédiate
     var wheelMode by remember { mutableStateOf(WheelMode.ONE_WHEEL) }
     var speedUnit by remember { mutableStateOf(SpeedUnit.KMH) }
     var isRiding by remember { mutableStateOf(false) }
     var isPaused by remember { mutableStateOf(false) }
     var cruiseControl by remember { mutableStateOf(false) }
 
-    val isLocked = scooterData.isLocked
-    val isDebridged = !scooterData.isLocked
-    val rideMode = scooterData.currentMode
+    // États locaux pour les contrôles
+    var headlightsOn by remember { mutableStateOf(false) }
+    var neonOn by remember { mutableStateOf(false) }
+    var isLocked by remember { mutableStateOf(true) }
+    var currentMode by remember { mutableStateOf(RideMode.ECO) }
+
+    val isDebridged = !isLocked
 
     val speedLimits = when {
         isDebridged && wheelMode == WheelMode.ONE_WHEEL -> SpeedLimits(20, 30, 40, 50)
@@ -55,7 +60,8 @@ fun RideScreen(
         else -> SpeedLimits(5, 10, 15, 25)
     }
 
-    val maxSpeed = when (rideMode) {
+    // Calcul vitesse max du mode actif
+    val maxSpeed = when (currentMode) {
         RideMode.PEDESTRIAN -> speedLimits.pedestrian
         RideMode.ECO -> speedLimits.eco
         RideMode.RACE -> speedLimits.race
@@ -72,7 +78,7 @@ fun RideScreen(
             .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        // 1. Compteur compact avec 2 cadenas + 3 emojis
+        // 1. Compteur avec 2 cadenas + 3 emojis
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -80,22 +86,19 @@ fun RideScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Speedometer
+            // Speedometer - Affiche juste le chiffre de vitesse max
             CompactSpeedometer(
                 speed = if (isConnected) currentSpeed else 0f,
                 maxSpeed = displayMaxSpeed.toFloat(),
                 speedUnit = speedUnit,
                 onUnitClick = {
                     scope.launch {
-                        // Toggle entre KMH et MPH
                         if (speedUnit == SpeedUnit.KMH) {
-                            // Passer en MPH
                             bluetoothManager.sendCommand(
                                 byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x15, 0x37, 0x2F, 0x35, 0x34, 0x8F.toByte(), 0xCB.toByte())
                             )
                             speedUnit = SpeedUnit.MPH
                         } else {
-                            // Passer en KMH
                             bluetoothManager.sendCommand(
                                 byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x15, 0x37, 0x2F, 0x34, 0x34, 0x88.toByte(), 0xCB.toByte())
                             )
@@ -106,39 +109,45 @@ fun RideScreen(
                 modifier = Modifier.weight(1f)
             )
 
-            // Colonne: 2 cadenas + 3 petits emojis
+            // Colonne: 2 cadenas + 3 emojis
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // 2 CADENAS SÉPARÉS
+                // 2 CADENAS
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    // VERROUILLER
+                    // LOCK 🔒
                     Button(
                         onClick = {
                             scope.launch {
                                 bluetoothManager.sendCommand(
                                     byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4B, 0x35, 0x34, 0x6C, 0xCB.toByte())
                                 )
+                                isLocked = true
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isLocked) Color.Red else Color.DarkGray
+                        ),
                         modifier = Modifier.size(50.dp),
                         contentPadding = PaddingValues(0.dp)
                     ) {
                         Text("🔒", fontSize = 20.sp)
                     }
 
-                    // DÉVERROUILLER
+                    // UNLOCK 🔓
                     Button(
                         onClick = {
                             scope.launch {
                                 bluetoothManager.sendCommand(
                                     byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4B, 0x34, 0x34, 0x6D, 0xCB.toByte())
                                 )
+                                isLocked = false
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Green),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (!isLocked) Color.Green else Color.DarkGray
+                        ),
                         modifier = Modifier.size(50.dp),
                         contentPadding = PaddingValues(0.dp)
                     ) {
@@ -146,65 +155,68 @@ fun RideScreen(
                     }
                 }
 
-                // 3 PETITS EMOJIS
+                // 3 EMOJIS
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     // PHARES
                     Button(
                         onClick = {
                             scope.launch {
-                                if (scooterData.headlightsOn) {
+                                if (headlightsOn) {
                                     // Éteindre
                                     bluetoothManager.sendCommand(
                                         byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xC6.toByte(), 0x34, 0x34, 0xD2.toByte(), 0xCA.toByte())
                                     )
+                                    headlightsOn = false
                                 } else {
                                     // Allumer
                                     bluetoothManager.sendCommand(
                                         byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xC6.toByte(), 0x35, 0x34, 0xD1.toByte(), 0xCA.toByte())
                                     )
+                                    headlightsOn = true
                                 }
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (scooterData.headlightsOn) Color(0xFFFFEB3B) else Color.DarkGray
+                            containerColor = if (headlightsOn) Color(0xFFFFEB3B) else Color.DarkGray
                         ),
                         modifier = Modifier.size(36.dp),
                         contentPadding = PaddingValues(0.dp)
                     ) {
-                        Text(if (scooterData.headlightsOn) "💡" else "⚫", fontSize = 16.sp)
+                        Text(if (headlightsOn) "💡" else "⚫", fontSize = 16.sp)
                     }
 
-                    // NÉON (commande 49 series - à confirmer)
+                    // NÉON
                     Button(
                         onClick = {
                             scope.launch {
-                                if (scooterData.neonOn) {
-                                    // Éteindre néon
+                                if (neonOn) {
+                                    // Éteindre
                                     bluetoothManager.sendCommand(
                                         byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x49, 0x34, 0x34, 0x6F, 0xCB.toByte())
                                     )
+                                    neonOn = false
                                 } else {
-                                    // Allumer néon
+                                    // Allumer
                                     bluetoothManager.sendCommand(
                                         byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x49, 0x35, 0x34, 0x6E, 0xCB.toByte())
                                     )
+                                    neonOn = true
                                 }
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (scooterData.neonOn) Color(0xFF9C27B0) else Color.DarkGray
+                            containerColor = if (neonOn) Color(0xFF9C27B0) else Color.DarkGray
                         ),
                         modifier = Modifier.size(36.dp),
                         contentPadding = PaddingValues(0.dp)
                     ) {
-                        Text(if (scooterData.neonOn) "🟣" else "⚫", fontSize = 16.sp)
+                        Text(if (neonOn) "🟣" else "⚫", fontSize = 16.sp)
                     }
 
                     // KLAXON
                     Button(
                         onClick = {
                             scope.launch {
-                                // Klaxon C7 series
                                 bluetoothManager.sendCommand(
                                     byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xC7.toByte(), 0x74, 0x2B, 0xB2.toByte(), 0xCA.toByte())
                                 )
@@ -220,7 +232,7 @@ fun RideScreen(
             }
         }
 
-        // 2. Mode de conduite compact
+        // 2. Mode de conduite
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF2C2C2E))
@@ -247,20 +259,58 @@ fun RideScreen(
                     }
 
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        // Bouton débridage
+                        // TORTUE 🐢
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    bluetoothManager.sendCommand(
+                                        byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x48, 0x35, 0x34, 0x6F, 0xCB.toByte())
+                                    )
+                                    cruiseControl = true
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (cruiseControl) Color.Blue else Color.DarkGray
+                            ),
+                            modifier = Modifier.size(40.dp),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text("🐢", fontSize = 16.sp)
+                        }
+
+                        // LAPIN 🐰
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    bluetoothManager.sendCommand(
+                                        byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x48, 0x36, 0x34, 0x6E, 0xCB.toByte())
+                                    )
+                                    cruiseControl = false
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (!cruiseControl) Color.Blue else Color.DarkGray
+                            ),
+                            modifier = Modifier.size(40.dp),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text("🐰", fontSize = 16.sp)
+                        }
+
+                        // ÉCLAIR
                         Button(
                             onClick = {
                                 scope.launch {
                                     if (isDebridged) {
-                                        // Verrouiller
                                         bluetoothManager.sendCommand(
                                             byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4B, 0x35, 0x34, 0x6C, 0xCB.toByte())
                                         )
+                                        isLocked = true
                                     } else {
-                                        // Déverrouiller
                                         bluetoothManager.sendCommand(
                                             byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4B, 0x34, 0x34, 0x6D, 0xCB.toByte())
                                         )
+                                        isLocked = false
                                     }
                                 }
                             },
@@ -272,39 +322,12 @@ fun RideScreen(
                         ) {
                             Text("⚡", fontSize = 16.sp)
                         }
-
-                        // RÉGULATEUR DE VITESSE
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    cruiseControl = !cruiseControl
-                                    if (cruiseControl) {
-                                        // Activer régulateur (tortue)
-                                        bluetoothManager.sendCommand(
-                                            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x48, 0x35, 0x34, 0x6F, 0xCB.toByte())
-                                        )
-                                    } else {
-                                        // Désactiver régulateur (lapin)
-                                        bluetoothManager.sendCommand(
-                                            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x48, 0x36, 0x34, 0x6E, 0xCB.toByte())
-                                        )
-                                    }
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (cruiseControl) Color(0xFF4CAF50) else Color.Gray
-                            ),
-                            modifier = Modifier.size(40.dp),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text(if (cruiseControl) "🐢" else "🐰", fontSize = 16.sp)
-                        }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Boutons modes
+                // BOUTONS MODES - Bleu si actif
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
@@ -316,10 +339,11 @@ fun RideScreen(
                                 bluetoothManager.sendCommand(
                                     byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4A, 0x37, 0x34, 0x63, 0xCB.toByte())
                                 )
+                                currentMode = RideMode.PEDESTRIAN
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (rideMode == RideMode.PEDESTRIAN) Color.Blue else Color.DarkGray
+                            containerColor = if (currentMode == RideMode.PEDESTRIAN) Color.Blue else Color.DarkGray
                         ),
                         modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
                         contentPadding = PaddingValues(4.dp)
@@ -337,10 +361,11 @@ fun RideScreen(
                                 bluetoothManager.sendCommand(
                                     byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4A, 0x36, 0x34, 0x6C, 0xCB.toByte())
                                 )
+                                currentMode = RideMode.ECO
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (rideMode == RideMode.ECO) Color.Blue else Color.DarkGray
+                            containerColor = if (currentMode == RideMode.ECO) Color.Blue else Color.DarkGray
                         ),
                         modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
                         contentPadding = PaddingValues(4.dp)
@@ -358,10 +383,11 @@ fun RideScreen(
                                 bluetoothManager.sendCommand(
                                     byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4A, 0x34, 0x34, 0x6E, 0xCB.toByte())
                                 )
+                                currentMode = RideMode.SPORT
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (rideMode == RideMode.SPORT) Color.Blue else Color.DarkGray
+                            containerColor = if (currentMode == RideMode.SPORT) Color.Blue else Color.DarkGray
                         ),
                         modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
                         contentPadding = PaddingValues(4.dp)
@@ -379,10 +405,11 @@ fun RideScreen(
                                 bluetoothManager.sendCommand(
                                     byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4A, 0x35, 0x34, 0x6D, 0xCB.toByte())
                                 )
+                                currentMode = RideMode.RACE
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (rideMode == RideMode.RACE) Color.Blue else Color.DarkGray
+                            containerColor = if (currentMode == RideMode.RACE) Color.Blue else Color.DarkGray
                         ),
                         modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
                         contentPadding = PaddingValues(4.dp)
@@ -396,7 +423,7 @@ fun RideScreen(
             }
         }
 
-        // 3. Clignotants (non fonctionnels)
+        // 3. Clignotants
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
@@ -429,7 +456,7 @@ fun RideScreen(
             }
         }
 
-        // 4. Graphique temps réel
+        // 4. Graphique
         Card(
             modifier = Modifier.fillMaxWidth().height(120.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF2C2C2E))
@@ -442,7 +469,7 @@ fun RideScreen(
             )
         }
 
-        // 5. Contrôles de trajet
+        // 5. Contrôles trajet
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
@@ -559,7 +586,8 @@ private fun CompactSpeedometer(
                     modifier = Modifier.clickable { onUnitClick() }
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "max ${maxSpeed.toInt()}", fontSize = 12.sp, color = Color.Gray)
+                // Affiche JUSTE le chiffre de vitesse max
+                Text(text = "${maxSpeed.toInt()}", fontSize = 18.sp, color = Color.White, fontWeight = FontWeight.Bold)
             }
         }
     }
