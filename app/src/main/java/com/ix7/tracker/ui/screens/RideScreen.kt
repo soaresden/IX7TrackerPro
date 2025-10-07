@@ -29,6 +29,8 @@ import com.ix7.tracker.core.RideMode
 import com.ix7.tracker.core.WheelMode
 import com.ix7.tracker.core.SpeedUnit
 import com.ix7.tracker.core.SpeedLimits
+import com.ix7.tracker.core.SpeedLimitMode
+import com.ix7.tracker.core.WheelMode.TWO_WHEELS
 
 @Composable
 fun RideScreen(
@@ -38,34 +40,45 @@ fun RideScreen(
 ) {
     val scope = rememberCoroutineScope()
 
-    // ÉTATS LOCAUX pour réactivité immédiate
+    // États locaux séparés
     var wheelMode by remember { mutableStateOf(WheelMode.ONE_WHEEL) }
     var speedUnit by remember { mutableStateOf(SpeedUnit.KMH) }
     var isRiding by remember { mutableStateOf(false) }
     var isPaused by remember { mutableStateOf(false) }
     var cruiseControl by remember { mutableStateOf(false) }
 
-    // États locaux pour les contrôles
     var headlightsOn by remember { mutableStateOf(false) }
     var neonOn by remember { mutableStateOf(false) }
-    var isLocked by remember { mutableStateOf(true) }
+    var isLocked by remember { mutableStateOf(true) }  // État des CADENAS
     var currentMode by remember { mutableStateOf(RideMode.ECO) }
 
-    val isDebridged = !isLocked
+    // Utiliser speedLimitMode au lieu de isDebridged
+    val isUnlimited = scooterData.speedLimitMode == SpeedLimitMode.UNLIMITED
 
+// Valeurs CORRIGÉES selon tes spécifications
     val speedLimits = when {
-        isDebridged && wheelMode == WheelMode.ONE_WHEEL -> SpeedLimits(20, 30, 40, 50)
-        isDebridged && wheelMode == WheelMode.TWO_WHEELS -> SpeedLimits(15, 30, 45, 60)
-        !isDebridged && wheelMode == WheelMode.ONE_WHEEL -> SpeedLimits(5, 10, 15, 25)
+        // Mode DÉBRIDÉ 1 roue
+        isUnlimited && wheelMode == WheelMode.ONE_WHEEL -> SpeedLimits(20, 30, 40, 50)
+
+        // Mode DÉBRIDÉ 2 roues
+        isUnlimited && wheelMode == TWO_WHEELS -> SpeedLimits(15, 30, 45, 60)
+
+        // Mode BRIDÉ 1 roue
+        !isUnlimited && wheelMode == WheelMode.ONE_WHEEL -> SpeedLimits(5, 10, 15, 25)
+
+        // Mode BRIDÉ 2 roues
+        !isUnlimited && wheelMode == TWO_WHEELS -> SpeedLimits(5, 10, 15, 25)
+
+        // Mode BRIDÉ 2 roues
         else -> SpeedLimits(5, 10, 15, 25)
     }
 
-    // Calcul vitesse max du mode actif
+    // Vitesse max du mode actif
     val maxSpeed = when (currentMode) {
         RideMode.PEDESTRIAN -> speedLimits.pedestrian
         RideMode.ECO -> speedLimits.eco
-        RideMode.RACE -> speedLimits.race
         RideMode.SPORT -> speedLimits.sport
+        RideMode.RACE -> speedLimits.race
     }
 
     val displayMaxSpeed = if (speedUnit == SpeedUnit.MPH) (maxSpeed * 0.621371).toInt() else maxSpeed
@@ -86,7 +99,6 @@ fun RideScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Speedometer - Affiche juste le chiffre de vitesse max
             CompactSpeedometer(
                 speed = if (isConnected) currentSpeed else 0f,
                 maxSpeed = displayMaxSpeed.toFloat(),
@@ -114,7 +126,7 @@ fun RideScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // 2 CADENAS
+                // 2 CADENAS - N'affectent QUE isLocked
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     // LOCK 🔒
                     Button(
@@ -123,7 +135,7 @@ fun RideScreen(
                                 bluetoothManager.sendCommand(
                                     byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4B, 0x35, 0x34, 0x6C, 0xCB.toByte())
                                 )
-                                isLocked = true
+                                isLocked = true  // Change SEULEMENT isLocked
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
@@ -142,7 +154,7 @@ fun RideScreen(
                                 bluetoothManager.sendCommand(
                                     byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4B, 0x34, 0x34, 0x6D, 0xCB.toByte())
                                 )
-                                isLocked = false
+                                isLocked = false  // Change SEULEMENT isLocked
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
@@ -162,13 +174,11 @@ fun RideScreen(
                         onClick = {
                             scope.launch {
                                 if (headlightsOn) {
-                                    // Éteindre
                                     bluetoothManager.sendCommand(
                                         byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xC6.toByte(), 0x34, 0x34, 0xD2.toByte(), 0xCA.toByte())
                                     )
                                     headlightsOn = false
                                 } else {
-                                    // Allumer
                                     bluetoothManager.sendCommand(
                                         byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xC6.toByte(), 0x35, 0x34, 0xD1.toByte(), 0xCA.toByte())
                                     )
@@ -190,13 +200,11 @@ fun RideScreen(
                         onClick = {
                             scope.launch {
                                 if (neonOn) {
-                                    // Éteindre
                                     bluetoothManager.sendCommand(
                                         byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x49, 0x34, 0x34, 0x6F, 0xCB.toByte())
                                     )
                                     neonOn = false
                                 } else {
-                                    // Allumer
                                     bluetoothManager.sendCommand(
                                         byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x49, 0x35, 0x34, 0x6E, 0xCB.toByte())
                                     )
@@ -247,7 +255,7 @@ fun RideScreen(
                         Button(
                             onClick = {
                                 wheelMode = if (wheelMode == WheelMode.ONE_WHEEL)
-                                    WheelMode.TWO_WHEELS else WheelMode.ONE_WHEEL
+                                    TWO_WHEELS else WheelMode.ONE_WHEEL
                             },
                             modifier = Modifier.size(40.dp),
                             contentPadding = PaddingValues(0.dp)
@@ -297,25 +305,16 @@ fun RideScreen(
                             Text("🐰", fontSize = 16.sp)
                         }
 
-                        // ÉCLAIR
+                        // ÉCLAIR - Toggle LIMITED/UNLIMITED
                         Button(
                             onClick = {
                                 scope.launch {
-                                    if (isDebridged) {
-                                        bluetoothManager.sendCommand(
-                                            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4B, 0x35, 0x34, 0x6C, 0xCB.toByte())
-                                        )
-                                        isLocked = true
-                                    } else {
-                                        bluetoothManager.sendCommand(
-                                            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4B, 0x34, 0x34, 0x6D, 0xCB.toByte())
-                                        )
-                                        isLocked = false
-                                    }
+                                    val newMode = if (isUnlimited) SpeedLimitMode.LIMITED else SpeedLimitMode.UNLIMITED
+                                    bluetoothManager.connector?.setSpeedLimitMode(newMode)
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isDebridged) Color.Red else Color.Gray
+                                containerColor = if (isUnlimited) Color.Red else Color.Gray
                             ),
                             modifier = Modifier.size(40.dp),
                             contentPadding = PaddingValues(0.dp)
@@ -327,7 +326,7 @@ fun RideScreen(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // BOUTONS MODES - Bleu si actif
+                // BOUTONS MODES
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
@@ -376,6 +375,28 @@ fun RideScreen(
                         }
                     }
 
+                    // RACE
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                bluetoothManager.sendCommand(
+                                    byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4A, 0x35, 0x34, 0x6D, 0xCB.toByte())
+                                )
+                                currentMode = RideMode.RACE
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (currentMode == RideMode.RACE) Color.Blue else Color.DarkGray
+                        ),
+                        modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
+                        contentPadding = PaddingValues(4.dp)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("🏎️", fontSize = 14.sp)
+                            Text("${speedLimits.race}", fontSize = 10.sp)
+                        }
+                    }
+
                     // SPORT
                     Button(
                         onClick = {
@@ -398,27 +419,7 @@ fun RideScreen(
                         }
                     }
 
-                    // RACE
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                bluetoothManager.sendCommand(
-                                    byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4A, 0x35, 0x34, 0x6D, 0xCB.toByte())
-                                )
-                                currentMode = RideMode.RACE
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (currentMode == RideMode.RACE) Color.Blue else Color.DarkGray
-                        ),
-                        modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
-                        contentPadding = PaddingValues(4.dp)
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("🏎️", fontSize = 14.sp)
-                            Text("${speedLimits.race}", fontSize = 10.sp)
-                        }
-                    }
+
                 }
             }
         }
@@ -586,7 +587,6 @@ private fun CompactSpeedometer(
                     modifier = Modifier.clickable { onUnitClick() }
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                // Affiche JUSTE le chiffre de vitesse max
                 Text(text = "${maxSpeed.toInt()}", fontSize = 18.sp, color = Color.White, fontWeight = FontWeight.Bold)
             }
         }

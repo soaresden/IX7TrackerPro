@@ -1,4 +1,6 @@
 package com.ix7.tracker.core
 
-class SpeedLimitMode {
+enum class SpeedLimitMode {
+    LIMITED,    // Bridé
+    UNLIMITED   // Débridé
 }

@@ -22,9 +22,10 @@ data class ScooterData(
     val isLocked: Boolean = false,
     val leftBlinker: Boolean = false,
     val rightBlinker: Boolean = false,
-    val isUnlocked: Boolean = false,  // Mode débridé
+    val speedLimitMode: SpeedLimitMode = SpeedLimitMode.LIMITED,  // Au lieu de isUnlocked
     val cruiseControl: Boolean = false,  // Régulateur
     val zeroStart: Boolean = false,  // Démarrage à zéro
+
 
     // Anciens champs (compatibilité)
     val lastUpdate: Date = Date(),

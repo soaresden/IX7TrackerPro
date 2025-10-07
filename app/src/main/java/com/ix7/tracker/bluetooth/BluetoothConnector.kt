@@ -20,7 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
-
+import com.ix7.tracker.core.SpeedLimitMode
 /**
  * Connecteur Bluetooth pour le protocole 61 9E (iX7 Pro)
  * VERSION SIMPLIFIÉE - Commandes en dur
@@ -249,20 +249,6 @@ class BluetoothConnector(
         }
     }
 
-    fun setUnlocked(unlocked: Boolean) {
-        Log.i(TAG, "🔓 ${if (unlocked) "DÉBRIDAGE" else "BRIDAGE"}")
-
-        // Commande débridage (à définir selon tes tests)
-        val command = if (unlocked) {
-            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xD0.toByte(), 0x35, 0x37, 0x87.toByte(), 0xCA.toByte())
-        } else {
-            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xD0.toByte(), 0x34, 0x37, 0x86.toByte(), 0xCA.toByte())
-        }
-
-        scope.launch {
-            sendCommand(command)
-        }
-    }
 
     fun setRideMode(mode: RideMode) {
         Log.i(TAG, "🏍️ Mode → $mode")
@@ -286,5 +272,33 @@ class BluetoothConnector(
         bluetoothGatt = null
         dataHandler.reset()
         Log.d(TAG, "🧹 Nettoyage terminé")
+    }
+
+    /**
+     * Change le mode de limitation de vitesse (LIMITED/UNLIMITED)
+     */
+    suspend fun setSpeedLimitMode(mode: SpeedLimitMode) {
+        Log.d(TAG, "Setting speed limit mode to: $mode")
+
+        // Mettre à jour l'état local
+        currentScooterData = currentScooterData.copy(
+            speedLimitMode = mode
+        )
+        onDataReceived(currentScooterData)
+
+        // TODO: Envoyer la commande Bluetooth réelle quand tu connais la trame
+        // Pour l'instant, c'est juste visuel
+
+        /* Exemple de ce que ça pourrait être :
+        val command = if (mode == SpeedLimitMode.UNLIMITED) {
+            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xXX, 0xXX, 0xXX, 0xXX, 0xCB.toByte())
+        } else {
+            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xXX, 0xXX, 0xXX, 0xXX, 0xCB.toByte())
+        }
+        writeCharacteristic?.let {
+            it.value = command
+            bluetoothGatt?.writeCharacteristic(it)
+        }
+        */
     }
 }
