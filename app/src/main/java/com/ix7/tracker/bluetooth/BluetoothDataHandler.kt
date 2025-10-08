@@ -8,12 +8,12 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Handler pour décoder toutes les trames du protocole 61 9E (iX7 Pro)
+ * Handler pour décoder toutes les trames du protocole 61 9E
  *
- * CORRECTIONS APPLIQUÉES :
- * ✅ Trame 0x37 : Vitesse en temps réel (FONCTIONNE)
- * ✅ Trame 0x30 : Mode corrigé selon les commandes TX
- * ✅ Trame 0x32 : Température corrigée (conversion hexadécimale en décimal)
+ * CORRECTIONS APPORTÉES (Janvier 2025):
+ * - Trame 0x3E: Les bytes [5-6] NE SONT PAS la vitesse !
+ * - La batterie à [7] est CORRECTE
+ * - La vitesse réelle doit être cherchée ailleurs ou dans les métadonnées BLE
  */
 class BluetoothDataHandler {
 
@@ -81,10 +81,15 @@ class BluetoothDataHandler {
             // Extraire la trame
             val frame = buffer.take(expectedSize).toByteArray()
 
-            // Traiter la trame
-            val parsedData = parseFrame(frame)
-            if (parsedData != null) {
-                result = parsedData
+            // Vérifier le checksum
+            if (ProtocolConstants.verifyChecksum(frame)) {
+                // Traiter la trame
+                val parsedData = parseFrame(frame)
+                if (parsedData != null) {
+                    result = parsedData
+                }
+            } else {
+                Log.w(TAG, "❌ Checksum invalide pour trame type 0x${"%02X".format(frameType)}")
             }
 
             // Retirer la trame traitée du buffer
@@ -120,7 +125,6 @@ class BluetoothDataHandler {
         return when (frameType) {
             ProtocolConstants.FRAME_STATUS -> 10       // 0x30
             ProtocolConstants.FRAME_TEMP -> 12         // 0x32
-            ProtocolConstants.FRAME_SPEED -> 9         // 0x37 ⭐ VITESSE
             ProtocolConstants.FRAME_REALTIME -> 16     // 0x3E
             ProtocolConstants.FRAME_SPECIAL_2 -> 20    // 0x3A
             ProtocolConstants.FRAME_SPECIAL_1 -> 19    // 0x38
@@ -130,7 +134,7 @@ class BluetoothDataHandler {
             ProtocolConstants.FRAME_DETAILED -> 49     // 0x1A
             ProtocolConstants.FRAME_EXTENDED -> 51     // 0x04
             ProtocolConstants.FRAME_INIT -> 67         // 0x02
-            ProtocolConstants.FRAME_INFO -> 40         // 0x00
+            ProtocolConstants.FRAME_INFO -> 40         // 0x00 (variable)
             else -> -1 // Type inconnu
         }
     }
@@ -140,20 +144,19 @@ class BluetoothDataHandler {
      */
     private fun parseFrame(frame: ByteArray): ScooterData? {
         val frameType = frame[2]
+        val hex = frame.joinToString(" ") { "%02X".format(it) }
 
         Log.i(TAG, "🔍 Parse trame type 0x${"%02X".format(frameType)} (${frame.size} bytes)")
 
         return when (frameType) {
-            ProtocolConstants.FRAME_SPEED -> parseSpeedFrame(frame)        // ⭐ Priorité 1
+            ProtocolConstants.FRAME_REALTIME -> parseRealtimeFrame(frame)
             ProtocolConstants.FRAME_STATUS -> parseStatusFrame(frame)
             ProtocolConstants.FRAME_TEMP -> parseTempFrame(frame)
-            ProtocolConstants.FRAME_REALTIME -> parseRealtimeFrame(frame)
             ProtocolConstants.FRAME_INIT -> parseInitFrame(frame)
             ProtocolConstants.FRAME_EXTENDED -> parseExtendedFrame(frame)
             ProtocolConstants.FRAME_DETAILED -> parseDetailedFrame(frame)
             ProtocolConstants.FRAME_COMBINED -> parseCombinedFrame(frame)
             else -> {
-                val hex = frame.joinToString(" ") { "%02X".format(it) }
                 Log.d(TAG, "   Type 0x${"%02X".format(frameType)}: $hex")
                 null
             }
@@ -161,65 +164,52 @@ class BluetoothDataHandler {
     }
 
     /**
-     * ⭐ Parse trame 0x37 - VITESSE EN TEMPS RÉEL (LA SEULE QUI MARCHE !)
+     * Parse trame 0x3E - Temps réel (BATTERIE SEULEMENT)
+     * Format: 61 9E 3E 17 35 DA C3 34 9E 37 14 30 8B 36 6E C8
      *
-     * Format: 61 9E 37 [SUB] 55 [DATA1] [VITESSE] [CRC] CB
-     *
-     * Exemples des logs :
-     * - 61 9E 37 14 55 00 00 41 CB  -> 0 km/h
-     * - 61 9E 37 14 55 06 39 7C CB  -> 57 km/h (0x39 = 57)
-     * - 61 9E 37 1D 53 04 2C 7C CA  -> 44 km/h (0x2C = 44)
-     *
-     * Position de la vitesse : Byte 6 (index 6)
+     * CORRECTION CRITIQUE:
+     * - Les bytes [5-6] NE SONT PAS la vitesse !
+     * - Byte [7] = Batterie en % ✓ CORRECT
+     * - La vitesse est probablement dans une autre trame ou dans les métadonnées BLE
      */
-    private fun parseSpeedFrame(frame: ByteArray): ScooterData {
-        if (frame.size < 7) {
-            Log.w(TAG, "   ⚠️ Trame vitesse trop courte: ${frame.size} bytes")
-            return ScooterData()
-        }
+    private fun parseRealtimeFrame(frame: ByteArray): ScooterData {
+        // ❌ ANCIEN CODE (FAUX):
+        // val speedRaw = ((frame[6].toInt() and 0xFF) shl 8) or (frame[5].toInt() and 0xFF)
+        // val speed = speedRaw / 10.0f
+        // → Donnait 5013.8 km/h (aberrant !)
 
-        val subType = frame[3].toInt() and 0xFF
-        val state = frame[4].toInt() and 0xFF
-        val data1 = frame[5].toInt() and 0xFF
-        val speed = (frame[6].toInt() and 0xFF).toFloat()  // ⭐ VITESSE en km/h
+        // ✓ NOUVEAU CODE (CORRIGÉ):
+        // La vitesse n'est PAS dans cette trame de 16 bytes
+        // Pour l'instant, on met 0.0f
+        // TODO: Chercher la vitesse dans les trames 0x16 (Combined) ou 0x1A (Detailed)
+        val speed = 0.0f
 
-        Log.i(TAG, "   🚀 VITESSE: ${speed.toInt()} km/h | État: 0x${"%02X".format(state)} | Data1: 0x${"%02X".format(data1)}")
+        // Byte 7 : Batterie (pourcentage) ✓ CORRECT
+        val battery = (frame[7].toInt() and 0xFF).toFloat()
 
-        // Le byte 4 (state) pourrait être la batterie (valeurs 53, 85 observées)
-        val possibleBattery = if (state in 40..100) state.toFloat() else 0f
+        Log.i(TAG, "   🔋 Batterie: ${battery}% (vitesse non disponible dans cette trame)")
+        Log.d(TAG, "   ⚠️ Bytes [5-6] = 0x${"%02X".format(frame[5])}${"%02X".format(frame[6])} (ne sont PAS la vitesse)")
 
         return ScooterData(
-            speed = speed,
-            battery = if (possibleBattery > 0) possibleBattery else 0f
+            speed = speed,      // 0.0f pour l'instant
+            battery = battery   // CORRECT ✓
         )
     }
 
     /**
-     * ✅ CORRIGÉ - Parse trame 0x30 - État/Mode
-     *
-     * Format: 61 9E 30 17 35 C3 [MODE_ID] 35 3E CA
-     *
-     * MAPPING CORRIGÉ selon les commandes TX :
-     * - 0x34 -> SPORT  (CMD : 4A 34)
-     * - 0x35 -> RACE   (CMD : 4A 35)
-     * - 0x36 -> ECO    (CMD : 4A 36)
-     * - 0x37 -> PEDESTRIAN (CMD : 4A 37)
-     * - 0xE1 -> PEDESTRIAN (fallback, valeur observée)
+     * Parse trame 0x30 - État/Mode
+     * Format: 61 9E 30 17 35 C3 E1 35 3E CA
      */
     private fun parseStatusFrame(frame: ByteArray): ScooterData {
-        if (frame.size < 7) return ScooterData()
-
         // Byte 6 : Mode actuel
         val modeId = frame[6]
         val mode = when (modeId) {
-            0x34.toByte() -> RideMode.SPORT       // ✅ CORRIGÉ
-            0x35.toByte() -> RideMode.RACE        // ✅ CORRIGÉ (avant = SPORT)
-            0x36.toByte() -> RideMode.ECO         // ✅ CORRIGÉ (avant = 0x34)
-            0x37.toByte() -> RideMode.PEDESTRIAN  // ✅ CORRIGÉ (avant = pas mappé)
-            0xE1.toByte() -> RideMode.PEDESTRIAN  // Valeur observée dans les logs
+            0xE1.toByte() -> RideMode.PEDESTRIAN
+            0x36.toByte() -> RideMode.ECO
+            0x37.toByte() -> RideMode.SPORT
             else -> {
                 Log.w(TAG, "   ⚠️ Mode inconnu: 0x${"%02X".format(modeId)}")
-                RideMode.ECO  // Mode par défaut
+                RideMode.ECO
             }
         }
 
@@ -229,146 +219,125 @@ class BluetoothDataHandler {
     }
 
     /**
-     * ✅ CORRIGÉ - Parse trame 0x32 - Températures
+     * Parse trame 0x32 - Températures
+     * Format: 61 9E 32 17 35 0B A4 35 A4 35 40 CA
      *
-     * Format: 61 9E 32 17 35 [T1_HEX] [T1_DEC] 35 [T2_HEX] 35 [CRC] CA
-     * Exemple: 61 9E 32 17 35 0B A4 35 A4 35 40 CA
-     *
-     * ANCIEN DÉCODAGE (FAUX) :
-     * - Byte 5: 0x0B = 11°C  ❌
-     * - Byte 7: 0xA4 = 164°C ❌
-     *
-     * NOUVEAU DÉCODAGE (CORRIGÉ) :
-     * Les températures sont encodées en notation hexadécimale "BCD-like" :
-     * - Byte 5 (0x0B) = partie entière (11)
-     * - Byte 6 (0xA4) = partie décimale (164 -> 1.64 -> .64 après virgule?)
-     *
-     * Ou peut-être :
-     * - 0x0B = 11 -> 28 avec offset de 17°C ?
-     * - Screenshot montre 28.2°C et 27.1°C
-     *
-     * Hypothèse : Temp = (hex_value * 2.5) ou (hex_value + offset)
-     * 0x0B = 11 -> 11 + 17 = 28°C ✅
-     *
-     * Testons avec offset +17
+     * ATTENTION: Les valeurs brutes (164, 181, etc.) semblent aberrantes
+     * À VÉRIFIER avec des captures pendant la conduite
      */
     private fun parseTempFrame(frame: ByteArray): ScooterData {
-        if (frame.size < 10) return ScooterData()
+        // Températures dans les bytes 5 et 7
+        // ATTENTION: Les valeurs semblent incorrectes (164°C, 181°C = impossible)
+        val temp1Raw = (frame[5].toInt() and 0xFF)
+        val temp2Raw = (frame[7].toInt() and 0xFF)
 
-        // Byte 5 et byte 8 semblent être les températures en hex
-        val temp1Raw = frame[5].toInt() and 0xFF
-        val temp2Raw = frame[8].toInt() and 0xFF
+        // Pour l'instant, on les log sans correction
+        // TODO: Trouver la vraie formule de conversion
+        val temp1 = temp1Raw.toFloat()
+        val temp2 = temp2Raw.toFloat()
 
-        // Hypothèse 1 : Offset de +17°C
-        val temp1WithOffset = (temp1Raw + 17).toFloat()
-        val temp2WithOffset = (temp2Raw + 17).toFloat()
+        Log.i(TAG, "   🌡️ Températures: T1=${temp1}°C (raw:$temp1Raw) | T2=${temp2}°C (raw:$temp2Raw)")
 
-        // Hypothèse 2 : Facteur multiplicateur 2.5
-        val temp1WithFactor = (temp1Raw * 2.5f)
-        val temp2WithFactor = (temp2Raw * 2.5f)
-
-        // Hypothèse 3 : Température directe
-        val temp1Direct = temp1Raw.toFloat()
-        val temp2Direct = temp2Raw.toFloat()
-
-        // On utilise l'offset pour l'instant (11 + 17 = 28°C ✅)
-        val temp1 = temp1WithOffset
-        val temp2 = temp2WithOffset
-
-        Log.i(TAG, "   🌡️ Températures: T1=${temp1.toInt()}°C (raw:$temp1Raw) | T2=${temp2.toInt()}°C (raw:$temp2Raw)")
-        Log.d(TAG, "       Test offset: T1=${temp1WithOffset}°C T2=${temp2WithOffset}°C")
-        Log.d(TAG, "       Test factor: T1=${temp1WithFactor}°C T2=${temp2WithFactor}°C")
-        Log.d(TAG, "       Test direct: T1=${temp1Direct}°C T2=${temp2Direct}°C")
+        if (temp1 > 100 || temp2 > 100) {
+            Log.w(TAG, "   ⚠️ Températures aberrantes ! Vérifier la formule de conversion")
+        }
 
         return ScooterData(temperature = temp1)
     }
 
     /**
-     * Parse trame 0x3E - Temps réel (vitesse, batterie)
-     * Format: 61 9E 3E 17 35 DA C3 34 9E 37 14 30 8B 36 6E C8
-     */
-    private fun parseRealtimeFrame(frame: ByteArray): ScooterData {
-        if (frame.size < 8) return ScooterData()
-
-        // Bytes 5-6 : Vitesse (little endian, km/h * 10)
-        val speedRaw = ((frame[6].toInt() and 0xFF) shl 8) or (frame[5].toInt() and 0xFF)
-        val speed = speedRaw / 10.0f
-
-        // Byte 7 : Batterie (pourcentage)
-        val battery = (frame[7].toInt() and 0xFF).toFloat()
-
-        Log.i(TAG, "   ⚡ Vitesse: ${speed}km/h  🔋 Batterie: ${battery}%")
-
-        return ScooterData(
-            speed = speed,
-            battery = battery
-        )
-    }
-
-    /**
      * Parse trame 0x02 - Initialisation
+     * Format: 61 9E 02 17 35 2E FE B0 ... (67 bytes)
+     *
+     * Cette trame contient beaucoup d'informations au démarrage
      */
     private fun parseInitFrame(frame: ByteArray): ScooterData? {
         Log.i(TAG, "   📋 Trame d'initialisation (${frame.size} bytes)")
 
-        // Tentative de lecture de données au démarrage
-        if (frame.size >= 20) {
-            // Recherche batterie et autres données
-            for (i in 5 until frame.size - 5) {
-                val value = frame[i].toInt() and 0xFF
-                if (value in 40..100) {
-                    Log.d(TAG, "       Batterie possible à offset $i: ${value}%")
-                }
-            }
-        }
+        // TODO: Analyser le contenu pour extraire les infos utiles
+        // Possiblement : versions firmware, capacité batterie, etc.
 
         return null
     }
 
     /**
-     * Parse trame 0x04 - Données étendues (kilométrage possible)
+     * Parse trame 0x04 - Données étendues (KILOMÉTRAGE TOTAL ICI !)
+     * Format: 61 9E 04 15 35 20 E1 34 FB 30 78 35 60 67 F2 77 8D EF ... (51 bytes)
+     *
+     * IMPORTANT: Cette trame contient le KILOMÉTRAGE TOTAL et le TEMPS DE CONDUITE
      */
     private fun parseExtendedFrame(frame: ByteArray): ScooterData? {
         Log.i(TAG, "   📊 Trame étendue - recherche kilométrage...")
 
-        // Tentative de recherche kilométrage (format à confirmer)
+        // Le kilométrage est probablement encodé dans les bytes 5-20
+        // Chercher une valeur raisonnable (0-1000 km)
+
+        // Tentative 1: Little endian 4 bytes (mètres)
         for (i in 5 until frame.size - 4) {
             val value = ByteBuffer.wrap(frame, i, 4)
                 .order(ByteOrder.LITTLE_ENDIAN)
                 .int
 
-            if (value in 100..100000) {
+            // Chercher une valeur entre 0 et 1000000 mètres (0-1000 km)
+            if (value in 100..1000000) {
                 val km = value / 1000.0f
-                Log.i(TAG, "   🎯 KILOMÉTRAGE TROUVÉ à offset $i: ${km}km")
+                Log.i(TAG, "   🎯 KILOMÉTRAGE TROUVÉ à offset $i: ${km}km (${value}m)")
                 return ScooterData(odometer = km)
             }
         }
+
+        // Tentative 2: Little endian 2 bytes (décamètres)
+        for (i in 5 until frame.size - 2) {
+            val value = ((frame[i+1].toInt() and 0xFF) shl 8) or (frame[i].toInt() and 0xFF)
+
+            // Si c'est en décamètres: 400km = 40000 décamètres = 0x9C40
+            if (value in 100..10000) {
+                val km = value / 100.0f
+                Log.i(TAG, "   🎯 KILOMÉTRAGE TROUVÉ (décam) à offset $i: ${km}km")
+                return ScooterData(odometer = km)
+            }
+        }
+
+        // Log pour analyse manuelle
+        val hex = frame.joinToString(" ") { "%02X".format(it) }
+        Log.w(TAG, "   ⚠️ Kilométrage non trouvé dans: $hex")
 
         return null
     }
 
     /**
      * Parse trame 0x1A - Données détaillées
+     * Format: 61 9E 1A 17 35 F6 9E 37 ... (49 bytes)
+     *
+     * HYPOTHÈSE: Cette trame pourrait contenir la vitesse !
      */
     private fun parseDetailedFrame(frame: ByteArray): ScooterData? {
-        Log.i(TAG, "   📝 Trame détaillée")
+        Log.i(TAG, "   📝 Trame détaillée (${frame.size} bytes)")
+
+        // TODO: Analyser cette trame pour trouver la vitesse
+        // Chercher des bytes qui varient selon la vitesse réelle
+
         return null
     }
 
     /**
      * Parse trame 0x16 - Combinée
+     * Format: 61 9E 16 17 35 DE ... (47 bytes)
+     *
+     * HYPOTHÈSE: Cette trame pourrait contenir la vitesse !
      */
-    private fun parseCombinedFrame(frame: ByteArray): ScooterData {
-        if (frame.size < 8) return ScooterData()
+    private fun parseCombinedFrame(frame: ByteArray): ScooterData? {
+        Log.i(TAG, "   🔄 Trame combinée (${frame.size} bytes)")
 
-        val speedRaw = ((frame[6].toInt() and 0xFF) shl 8) or (frame[5].toInt() and 0xFF)
-        val speed = speedRaw / 10.0f
-        val battery = (frame[7].toInt() and 0xFF).toFloat()
+        // TODO: Analyser cette trame pour trouver la vitesse
+        // La batterie semble être aussi à [7] = 52%
 
-        Log.i(TAG, "   🔄 Combinée: Speed=${speed}km/h Battery=${battery}%")
+        val battery = if (frame.size > 7) (frame[7].toInt() and 0xFF).toFloat() else 0f
+
+        Log.i(TAG, "   🔋 Batterie: ${battery}%")
 
         return ScooterData(
-            speed = speed,
+            speed = 0.0f,       // À TROUVER
             battery = battery
         )
     }
