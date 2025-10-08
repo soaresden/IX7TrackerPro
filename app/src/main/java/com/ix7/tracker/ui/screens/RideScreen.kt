@@ -30,13 +30,24 @@ import com.ix7.tracker.core.SpeedLimitMode
 import com.ix7.tracker.protocol.ProtocolConstants
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlin.math.*
+import android.media.ToneGenerator
+import android.media.AudioManager
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.content.Context
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import android.util.Log
 
 /**
  * ✅ CORRECTIONS APPLIQUÉES :
  * - Affichage vitesse depuis scooterData.speed (trame 0x37)
- * - Meilleure gestion des états locaux
- * - Corrections des mapping de modes
+ * - Klaxon maintenu = bip continu
+ * - Barrière et éclair en BLEU quand actifs
+ * - Regroupements visuels par paires
  */
 @Composable
 fun RideScreen(
@@ -45,6 +56,7 @@ fun RideScreen(
     bluetoothManager: BluetoothRepository
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     // ===== ÉTATS LOCAUX =====
     var wheelMode by remember { mutableStateOf(WheelMode.ONE_WHEEL) }
@@ -127,104 +139,132 @@ fun RideScreen(
                 modifier = Modifier.weight(1f)
             )
 
-            // Colonne: 2 cadenas + 3 emojis
+            // Colonne: 2 cadenas + 3 emojis - GROUPÉS
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // 2 CADENAS
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                bluetoothManager.sendCommand(ProtocolConstants.CMD_LOCK)
-                                isLocked = true
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isLocked) Color.Red else Color.DarkGray
-                        ),
-                        modifier = Modifier.size(50.dp),
-                        contentPadding = PaddingValues(0.dp)
+                // 2 CADENAS - GROUPÉS DANS UNE CARD
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1E)),
+                    modifier = Modifier.padding(2.dp)
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(4.dp)
                     ) {
-                        Text("🔒", fontSize = 20.sp)
-                    }
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    bluetoothManager.sendCommand(ProtocolConstants.CMD_LOCK)
+                                    isLocked = true
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isLocked) Color.Red else Color.DarkGray
+                            ),
+                            modifier = Modifier.size(50.dp),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text("🔒", fontSize = 20.sp)
+                        }
 
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                bluetoothManager.sendCommand(ProtocolConstants.CMD_UNLOCK)
-                                isLocked = false
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (!isLocked) Color.Green else Color.DarkGray
-                        ),
-                        modifier = Modifier.size(50.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text("🔓", fontSize = 20.sp)
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    bluetoothManager.sendCommand(ProtocolConstants.CMD_UNLOCK)
+                                    isLocked = false
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (!isLocked) Color.Green else Color.DarkGray
+                            ),
+                            modifier = Modifier.size(50.dp),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text("🔓", fontSize = 20.sp)
+                        }
                     }
                 }
 
-                // 3 EMOJIS
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    // PHARES
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                if (headlightsOn) {
-                                    bluetoothManager.sendCommand(ProtocolConstants.CMD_LIGHTS_OFF)
-                                    headlightsOn = false
-                                } else {
-                                    bluetoothManager.sendCommand(ProtocolConstants.CMD_LIGHTS_ON)
-                                    headlightsOn = true
+                // 3 EMOJIS - GROUPÉS DANS UNE CARD
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1E)),
+                    modifier = Modifier.padding(2.dp)
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(4.dp)
+                    ) {
+                        // PHARES
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    if (headlightsOn) {
+                                        bluetoothManager.sendCommand(ProtocolConstants.CMD_LIGHTS_OFF)
+                                        headlightsOn = false
+                                    } else {
+                                        bluetoothManager.sendCommand(ProtocolConstants.CMD_LIGHTS_ON)
+                                        headlightsOn = true
+                                    }
                                 }
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (headlightsOn) Color(0xFFFFEB3B) else Color.DarkGray
-                        ),
-                        modifier = Modifier.size(36.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text(if (headlightsOn) "💡" else "⚫", fontSize = 16.sp)
-                    }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (headlightsOn) Color(0xFFFFEB3B) else Color.DarkGray
+                            ),
+                            modifier = Modifier.size(36.dp),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text(if (headlightsOn) "💡" else "⚫", fontSize = 16.sp)
+                        }
 
-                    // NÉON
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                if (neonOn) {
-                                    bluetoothManager.sendCommand(ProtocolConstants.CMD_NEON_OFF)
-                                    neonOn = false
-                                } else {
-                                    bluetoothManager.sendCommand(ProtocolConstants.CMD_NEON_ON)
-                                    neonOn = true
+                        // NÉON
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    if (neonOn) {
+                                        bluetoothManager.sendCommand(ProtocolConstants.CMD_NEON_OFF)
+                                        neonOn = false
+                                    } else {
+                                        bluetoothManager.sendCommand(ProtocolConstants.CMD_NEON_ON)
+                                        neonOn = true
+                                    }
                                 }
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (neonOn) Color(0xFF9C27B0) else Color.DarkGray
-                        ),
-                        modifier = Modifier.size(36.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text(if (neonOn) "🟣" else "⚫", fontSize = 16.sp)
-                    }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (neonOn) Color(0xFF9C27B0) else Color.DarkGray
+                            ),
+                            modifier = Modifier.size(36.dp),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text(if (neonOn) "🟣" else "⚫", fontSize = 16.sp)
+                        }
 
-                    // KLAXON
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                bluetoothManager.sendCommand(ProtocolConstants.CMD_HORN)
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5722)),
-                        modifier = Modifier.size(36.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text("🔊", fontSize = 16.sp)
+                        // KLAXON - MAINTIEN = BIP CONTINU
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFFF5722))
+                                .pointerInput(Unit) {
+                                    detectTapGestures(
+                                        onPress = {
+                                            scope.launch {
+                                                bluetoothManager.sendCommand(ProtocolConstants.CMD_HORN_TRY_1)
+                                                Log.i("HORN", "🔊 Klaxon activé (maintien)")
+                                            }
+                                            tryAwaitRelease()
+                                            scope.launch {
+                                                bluetoothManager.sendCommand(ProtocolConstants.CMD_HORN_TRY_1)
+                                                Log.i("HORN", "🔊 Klaxon désactivé (relâché)")
+                                            }
+                                        }
+                                    )
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("🔊", fontSize = 18.sp)
+                        }
                     }
                 }
             }
@@ -243,72 +283,143 @@ fun RideScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Mode roues
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Mode roues - 2 boutons séparés
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text("Roues:", fontSize = 12.sp, color = Color.White)
+
+                        // Bouton 1 ROUE
                         Button(
                             onClick = {
-                                wheelMode = if (wheelMode == WheelMode.ONE_WHEEL)
-                                    WheelMode.TWO_WHEELS else WheelMode.ONE_WHEEL
+                                wheelMode = WheelMode.ONE_WHEEL
+                                scope.launch {
+                                    bluetoothManager.connector?.setWheelMode(WheelMode.ONE_WHEEL)
+                                }
                             },
-                            modifier = Modifier.size(40.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (wheelMode == WheelMode.ONE_WHEEL)
+                                    Color.Blue else Color.DarkGray
+                            ),
+                            modifier = Modifier.size(45.dp),
                             contentPadding = PaddingValues(0.dp)
                         ) {
-                            Text(wheelMode.emoji, fontSize = 16.sp)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("🛴", fontSize = 14.sp)
+                                Text("1", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(wheelMode.label, fontSize = 12.sp, color = Color.White)
+
+                        // Bouton 2 ROUES
+                        Button(
+                            onClick = {
+                                wheelMode = WheelMode.TWO_WHEELS
+                                scope.launch {
+                                    bluetoothManager.connector?.setWheelMode(WheelMode.TWO_WHEELS)
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (wheelMode == WheelMode.TWO_WHEELS)
+                                    Color.Blue else Color.DarkGray
+                            ),
+                            modifier = Modifier.size(45.dp),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("🏍️️", fontSize = 14.sp)
+                                Text("2", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        // CRUISE CONTROL - TORTUE 🐢
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    bluetoothManager.sendCommand(ProtocolConstants.CMD_CRUISE_ON)
-                                    cruiseControl = true
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (cruiseControl) Color.Blue else Color.DarkGray
-                            ),
-                            modifier = Modifier.size(40.dp),
-                            contentPadding = PaddingValues(0.dp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // CRUISE CONTROL - GROUPÉ DANS UNE CARD
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1E)),
+                            modifier = Modifier.padding(2.dp)
                         ) {
-                            Text("🐢", fontSize = 16.sp)
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.padding(4.dp)
+                            ) {
+                                // CROIX ROUGE ❌ - Régulateur OFF
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            bluetoothManager.sendCommand(ProtocolConstants.CMD_CRUISE_OFF)
+                                            cruiseControl = false
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (!cruiseControl) Color.Blue else Color.DarkGray
+                                    ),
+                                    modifier = Modifier.size(40.dp),
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Text("❌", fontSize = 16.sp)
+                                }
+
+                                // CIBLE 🎯 - Régulateur ON
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            bluetoothManager.sendCommand(ProtocolConstants.CMD_CRUISE_ON)
+                                            cruiseControl = true
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (cruiseControl) Color.Blue else Color.DarkGray
+                                    ),
+                                    modifier = Modifier.size(40.dp),
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Text("🎯", fontSize = 16.sp)
+                                }
+                            }
                         }
 
-                        // CRUISE OFF - LAPIN 🐰
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    bluetoothManager.sendCommand(ProtocolConstants.CMD_CRUISE_OFF)
-                                    cruiseControl = false
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (!cruiseControl) Color.Blue else Color.DarkGray
-                            ),
-                            modifier = Modifier.size(40.dp),
-                            contentPadding = PaddingValues(0.dp)
+                        // LIMITATION VITESSE - GROUPÉ DANS UNE CARD
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1E)),
+                            modifier = Modifier.padding(2.dp)
                         ) {
-                            Text("🐰", fontSize = 16.sp)
-                        }
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.padding(4.dp)
+                            ) {
+                                // BRIDÉ 🚧 - BLEU QUAND ACTIF
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            bluetoothManager.connector?.setSpeedLimitMode(SpeedLimitMode.LIMITED)
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (!isUnlimited) Color.Blue else Color.DarkGray
+                                    ),
+                                    modifier = Modifier.size(40.dp),
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Text("🚧", fontSize = 16.sp)
+                                }
 
-                        // DÉBRIDAGE - ÉCLAIR ⚡
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    val newMode = if (isUnlimited) SpeedLimitMode.LIMITED else SpeedLimitMode.UNLIMITED
-                                    bluetoothManager.connector?.setSpeedLimitMode(newMode)
+                                // DÉBRIDÉ ⚡ - BLEU QUAND ACTIF
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            bluetoothManager.connector?.setSpeedLimitMode(SpeedLimitMode.UNLIMITED)
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isUnlimited) Color.Blue else Color.DarkGray
+                                    ),
+                                    modifier = Modifier.size(40.dp),
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Text("⚡", fontSize = 16.sp)
                                 }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isUnlimited) Color.Red else Color.Gray
-                            ),
-                            modifier = Modifier.size(40.dp),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text("⚡", fontSize = 16.sp)
+                            }
                         }
                     }
                 }

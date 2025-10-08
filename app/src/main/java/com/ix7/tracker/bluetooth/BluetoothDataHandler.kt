@@ -10,10 +10,11 @@ import java.nio.ByteOrder
 /**
  * Handler pour décoder toutes les trames du protocole 61 9E
  *
- * CORRECTIONS APPORTÉES (Janvier 2025):
- * - Trame 0x3E: Les bytes [5-6] NE SONT PAS la vitesse !
- * - La batterie à [7] est CORRECTE
- * - La vitesse réelle doit être cherchée ailleurs ou dans les métadonnées BLE
+ * CORRECTIONS APPORTÉES (Octobre 2025):
+ * - ✅ Trame 0x3E: Batterie à [7] est CORRECTE
+ * - ✅ Trame 0x1A: Odomètre trouvé aux offsets 9 et 11 (2 bytes LE, décamètres)
+ * - ✅ Trame 0x16: Odomètre trouvé à l'offset 17 (2 bytes LE, décamètres)
+ * - ❓ La vitesse n'est pas dans les trames actuelles (nécessite nouveaux logs)
  */
 class BluetoothDataHandler {
 
@@ -167,32 +168,18 @@ class BluetoothDataHandler {
      * Parse trame 0x3E - Temps réel (BATTERIE SEULEMENT)
      * Format: 61 9E 3E 17 35 DA C3 34 9E 37 14 30 8B 36 6E C8
      *
-     * CORRECTION CRITIQUE:
-     * - Les bytes [5-6] NE SONT PAS la vitesse !
-     * - Byte [7] = Batterie en % ✓ CORRECT
-     * - La vitesse est probablement dans une autre trame ou dans les métadonnées BLE
+     * ✅ CONFIRMÉ:
+     * - Byte [7] = Batterie en % ✅ CORRECT
+     * - La vitesse N'EST PAS dans cette trame !
      */
     private fun parseRealtimeFrame(frame: ByteArray): ScooterData {
-        // ❌ ANCIEN CODE (FAUX):
-        // val speedRaw = ((frame[6].toInt() and 0xFF) shl 8) or (frame[5].toInt() and 0xFF)
-        // val speed = speedRaw / 10.0f
-        // → Donnait 5013.8 km/h (aberrant !)
-
-        // ✓ NOUVEAU CODE (CORRIGÉ):
-        // La vitesse n'est PAS dans cette trame de 16 bytes
-        // Pour l'instant, on met 0.0f
-        // TODO: Chercher la vitesse dans les trames 0x16 (Combined) ou 0x1A (Detailed)
-        val speed = 0.0f
-
-        // Byte 7 : Batterie (pourcentage) ✓ CORRECT
+        // Byte 7 : Batterie (pourcentage) ✅ CORRECT
         val battery = (frame[7].toInt() and 0xFF).toFloat()
 
-        Log.i(TAG, "   🔋 Batterie: ${battery}% (vitesse non disponible dans cette trame)")
-        Log.d(TAG, "   ⚠️ Bytes [5-6] = 0x${"%02X".format(frame[5])}${"%02X".format(frame[6])} (ne sont PAS la vitesse)")
+        Log.i(TAG, "   🔋 Batterie: ${battery}%")
 
         return ScooterData(
-            speed = speed,      // 0.0f pour l'instant
-            battery = battery   // CORRECT ✓
+            battery = battery
         )
     }
 
@@ -261,84 +248,65 @@ class BluetoothDataHandler {
     }
 
     /**
-     * Parse trame 0x04 - Données étendues (KILOMÉTRAGE TOTAL ICI !)
+     * Parse trame 0x04 - Données étendues
      * Format: 61 9E 04 15 35 20 E1 34 FB 30 78 35 60 67 F2 77 8D EF ... (51 bytes)
      *
-     * IMPORTANT: Cette trame contient le KILOMÉTRAGE TOTAL et le TEMPS DE CONDUITE
+     * NOTE: L'odomètre n'a PAS été trouvé dans cette trame
+     * Il est dans les trames 0x1A (DETAILED) et 0x16 (COMBINED)
      */
     private fun parseExtendedFrame(frame: ByteArray): ScooterData? {
-        Log.i(TAG, "   📊 Trame étendue - recherche kilométrage...")
-
-        // Le kilométrage est probablement encodé dans les bytes 5-20
-        // Chercher une valeur raisonnable (0-1000 km)
-
-        // Tentative 1: Little endian 4 bytes (mètres)
-        for (i in 5 until frame.size - 4) {
-            val value = ByteBuffer.wrap(frame, i, 4)
-                .order(ByteOrder.LITTLE_ENDIAN)
-                .int
-
-            // Chercher une valeur entre 0 et 1000000 mètres (0-1000 km)
-            if (value in 100..1000000) {
-                val km = value / 1000.0f
-                Log.i(TAG, "   🎯 KILOMÉTRAGE TROUVÉ à offset $i: ${km}km (${value}m)")
-                return ScooterData(odometer = km)
-            }
-        }
-
-        // Tentative 2: Little endian 2 bytes (décamètres)
-        for (i in 5 until frame.size - 2) {
-            val value = ((frame[i+1].toInt() and 0xFF) shl 8) or (frame[i].toInt() and 0xFF)
-
-            // Si c'est en décamètres: 400km = 40000 décamètres = 0x9C40
-            if (value in 100..10000) {
-                val km = value / 100.0f
-                Log.i(TAG, "   🎯 KILOMÉTRAGE TROUVÉ (décam) à offset $i: ${km}km")
-                return ScooterData(odometer = km)
-            }
-        }
-
-        // Log pour analyse manuelle
-        val hex = frame.joinToString(" ") { "%02X".format(it) }
-        Log.w(TAG, "   ⚠️ Kilométrage non trouvé dans: $hex")
-
+        Log.i(TAG, "   📊 Trame étendue (pas d'odomètre ici)")
         return null
     }
 
     /**
-     * Parse trame 0x1A - Données détaillées
+     * ✅ Parse trame 0x1A - Données détaillées (ODOMÈTRE ICI !)
      * Format: 61 9E 1A 17 35 F6 9E 37 ... (49 bytes)
      *
-     * HYPOTHÈSE: Cette trame pourrait contenir la vitesse !
+     * TROUVÉ ! Odomètre aux offsets 9 et 11
+     * Format: 2 bytes Little Endian en DÉCAMÈTRES (1 dam = 10 m)
      */
     private fun parseDetailedFrame(frame: ByteArray): ScooterData? {
-        Log.i(TAG, "   📝 Trame détaillée (${frame.size} bytes)")
+        Log.i(TAG, "   🔍 Trame détaillée (${frame.size} bytes)")
 
-        // TODO: Analyser cette trame pour trouver la vitesse
-        // Chercher des bytes qui varient selon la vitesse réelle
+        if (frame.size < 12) {
+            return null
+        }
 
-        return null
+        // ✅ NOUVEAU : Extraction odomètre à l'offset 9
+        // 2 bytes Little Endian = décamètres
+        val odometerRaw = ((frame[10].toInt() and 0xFF) shl 8) or (frame[9].toInt() and 0xFF)
+        val odometer = odometerRaw / 100.0f  // Conversion décamètres → km
+
+        Log.i(TAG, "   🛣️ Odomètre: ${String.format("%.2f", odometer)}km (${odometerRaw} dam)")
+
+        return ScooterData(odometer = odometer)
     }
 
     /**
-     * Parse trame 0x16 - Combinée
+     * ✅ Parse trame 0x16 - Combinée (BATTERIE + ODOMÈTRE)
      * Format: 61 9E 16 17 35 DE ... (47 bytes)
      *
-     * HYPOTHÈSE: Cette trame pourrait contenir la vitesse !
+     * TROUVÉ ! Odomètre à l'offset 17
+     * Format: 2 bytes Little Endian en DÉCAMÈTRES
      */
     private fun parseCombinedFrame(frame: ByteArray): ScooterData? {
         Log.i(TAG, "   🔄 Trame combinée (${frame.size} bytes)")
 
-        // TODO: Analyser cette trame pour trouver la vitesse
-        // La batterie semble être aussi à [7] = 52%
-
+        // Batterie à [7]
         val battery = if (frame.size > 7) (frame[7].toInt() and 0xFF).toFloat() else 0f
 
-        Log.i(TAG, "   🔋 Batterie: ${battery}%")
+        // ✅ NOUVEAU : Odomètre à l'offset 17
+        val odometer = if (frame.size >= 19) {
+            val raw = ((frame[18].toInt() and 0xFF) shl 8) or (frame[17].toInt() and 0xFF)
+            raw / 100.0f  // Conversion décamètres → km
+        } else 0f
+
+        Log.i(TAG, "   🔋 Batterie: ${battery}% | 🛣️ Odomètre: ${String.format("%.2f", odometer)}km")
 
         return ScooterData(
-            speed = 0.0f,       // À TROUVER
-            battery = battery
+            battery = battery,
+            odometer = odometer
         )
     }
 

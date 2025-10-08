@@ -4,7 +4,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ix7.tracker.bluetooth.BluetoothRepository
 import com.ix7.tracker.core.ConnectionState
 import com.ix7.tracker.utils.LogManager
@@ -22,48 +25,139 @@ fun MainScreen(
     val scooterData by bluetoothManager.scooterData.collectAsState()
     val isScanning by bluetoothManager.isScanning.collectAsState()
 
-    Column {
-        NavigationBar {
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Barre de navigation avec 6 onglets
+        NavigationBar(
+            containerColor = Color(0xFF1C1C1E),
+            contentColor = Color.White
+        ) {
+            // 0 - CONNEXION
             NavigationBarItem(
-                icon = { Text("🔗") },
-                label = { Text("Connexion") },
+                icon = { Text("🔌", fontSize = 20.sp) },
+                label = { Text("Connexion", fontSize = 10.sp) },
                 selected = selectedTab == 0,
-                onClick = { selectedTab = 0 }
-            )
-            NavigationBarItem(
-                icon = { Text("📊") },
-                label = { Text("Données") },
-                selected = selectedTab == 1,
-                onClick = { selectedTab = 1 }
-            )
-            NavigationBarItem(
-                icon = { Text("🛴") },
-                label = { Text("Conduite") },
-                selected = selectedTab == 2,
-                onClick = { selectedTab = 2 }
-            )
-            NavigationBarItem(
-                icon = { Text("📝") },
-                label = { Text("Logs") },
-                selected = selectedTab == 3,
-                onClick = { selectedTab = 3 }
+                onClick = { selectedTab = 0 },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF0A84FF),
+                    selectedTextColor = Color(0xFF0A84FF),
+                    unselectedIconColor = Color.Gray,
+                    unselectedTextColor = Color.Gray,
+                    indicatorColor = Color(0xFF2C2C2E)
+                )
             )
 
+            // 1 - INFORMATIONS
             NavigationBarItem(
-                icon = { Text("🧪") },
-                label = { Text("Test") },
+                icon = { Text("ℹ️", fontSize = 20.sp) },
+                label = { Text("Infos", fontSize = 10.sp) },
+                selected = selectedTab == 1,
+                onClick = { selectedTab = 1 },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF0A84FF),
+                    selectedTextColor = Color(0xFF0A84FF),
+                    unselectedIconColor = Color.Gray,
+                    unselectedTextColor = Color.Gray,
+                    indicatorColor = Color(0xFF2C2C2E)
+                )
+            )
+
+            // 2 - RIDE
+            NavigationBarItem(
+                icon = { Text("🛴", fontSize = 20.sp) },
+                label = { Text("Ride", fontSize = 10.sp) },
+                selected = selectedTab == 2,
+                onClick = { selectedTab = 2 },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF0A84FF),
+                    selectedTextColor = Color(0xFF0A84FF),
+                    unselectedIconColor = Color.Gray,
+                    unselectedTextColor = Color.Gray,
+                    indicatorColor = Color(0xFF2C2C2E)
+                )
+            )
+
+            // 3 - TRIPS (Historique)
+            NavigationBarItem(
+                icon = { Text("📊", fontSize = 20.sp) },
+                label = { Text("Trips", fontSize = 10.sp) },
+                selected = selectedTab == 3,
+                onClick = { selectedTab = 3 },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF0A84FF),
+                    selectedTextColor = Color(0xFF0A84FF),
+                    unselectedIconColor = Color.Gray,
+                    unselectedTextColor = Color.Gray,
+                    indicatorColor = Color(0xFF2C2C2E)
+                )
+            )
+
+            // 4 - TEST
+            NavigationBarItem(
+                icon = { Text("🧪", fontSize = 20.sp) },
+                label = { Text("Test", fontSize = 10.sp) },
                 selected = selectedTab == 4,
-                onClick = { selectedTab = 4 }
+                onClick = { selectedTab = 4 },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF0A84FF),
+                    selectedTextColor = Color(0xFF0A84FF),
+                    unselectedIconColor = Color.Gray,
+                    unselectedTextColor = Color.Gray,
+                    indicatorColor = Color(0xFF2C2C2E)
+                )
+            )
+
+            // 5 - SETTINGS
+            NavigationBarItem(
+                icon = { Text("⚙️", fontSize = 20.sp) },
+                label = { Text("Settings", fontSize = 10.sp) },
+                selected = selectedTab == 5,
+                onClick = { selectedTab = 5 },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF0A84FF),
+                    selectedTextColor = Color(0xFF0A84FF),
+                    unselectedIconColor = Color.Gray,
+                    unselectedTextColor = Color.Gray,
+                    indicatorColor = Color(0xFF2C2C2E)
+                )
             )
         }
 
-        Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        // Contenu de l'écran sélectionné
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
             when (selectedTab) {
-                0 -> ConnectionScreen(bluetoothManager, discoveredDevices, connectionState, isScanning)
-                1 -> CompactDataScreen(bluetoothManager, scooterData, connectionState)
-                2 -> RideScreen(scooterData, connectionState == ConnectionState.CONNECTED, bluetoothManager)  // AJOUTE bluetoothManager
-                3 -> LogScreen(logManager)
-                4 -> TestScreen(bluetoothManager, connectionState == ConnectionState.CONNECTED)
+                0 -> ConnectionScreen(
+                    bluetoothManager = bluetoothManager,
+                    discoveredDevices = discoveredDevices,
+                    connectionState = connectionState,
+                    isScanning = isScanning
+                )
+
+                1 -> InfoScreen(
+                    scooterData = scooterData,
+                    isConnected = connectionState == ConnectionState.CONNECTED
+                )
+
+                2 -> RideScreen(
+                    scooterData = scooterData,
+                    isConnected = connectionState == ConnectionState.CONNECTED,
+                    bluetoothManager = bluetoothManager
+                )
+
+                3 -> TripHistoryScreen()
+
+                4 -> TestScreen(
+                    bluetoothManager = bluetoothManager,
+                    isConnected = connectionState == ConnectionState.CONNECTED
+                )
+
+                5 -> SettingsScreen(
+                    bluetoothManager = bluetoothManager,
+                    isConnected = connectionState == ConnectionState.CONNECTED
+                )
             }
         }
     }
