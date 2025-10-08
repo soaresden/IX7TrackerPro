@@ -11,16 +11,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ix7.tracker.bluetooth.BluetoothRepository
-import com.ix7.tracker.protocol.ProtocolConstants
-import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
     bluetoothManager: BluetoothRepository,
     isConnected: Boolean
 ) {
-    val scope = rememberCoroutineScope()
-
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -29,85 +25,10 @@ fun SettingsScreen(
     ) {
         item {
             Text(
-                text = "⚙️ Paramètres",
-                fontSize = 28.sp,
+                text = "⚙️ Réglages",
+                fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
-            )
-        }
-
-        // ═══════════════════════════════════════════════════════════════════
-        // RÉGLAGES SCOOTER
-        // ═══════════════════════════════════════════════════════════════════
-        item {
-            SectionHeader("Réglages du scooter")
-        }
-
-        item {
-            SettingButton(
-                icon = "🔧",
-                title = "Calibrer le scooter",
-                description = "Recalibrer les capteurs du scooter",
-                enabled = isConnected,
-                onClick = {
-                    // TODO: Ajouter commande de calibration
-                }
-            )
-        }
-
-        // ═══════════════════════════════════════════════════════════════════
-        // ÉCLAIRAGE PAR DÉFAUT
-        // ═══════════════════════════════════════════════════════════════════
-        item {
-            SectionHeader("Éclairage au démarrage")
-        }
-
-        item {
-            var defaultLights by remember { mutableStateOf(false) }
-            SettingSwitch(
-                icon = "💡",
-                title = "Phares automatiques",
-                description = "Allumer les phares au démarrage",
-                checked = defaultLights,
-                onCheckedChange = {
-                    defaultLights = it
-                    // Sauvegarder la préférence
-                }
-            )
-        }
-
-        item {
-            var defaultNeon by remember { mutableStateOf(false) }
-            SettingSwitch(
-                icon = "🟣",
-                title = "Néon automatique",
-                description = "Allumer le néon au démarrage",
-                checked = defaultNeon,
-                onCheckedChange = {
-                    defaultNeon = it
-                    // Sauvegarder la préférence
-                }
-            )
-        }
-
-        // ═══════════════════════════════════════════════════════════════════
-        // SÉCURITÉ
-        // ═══════════════════════════════════════════════════════════════════
-        item {
-            SectionHeader("Sécurité")
-        }
-
-        item {
-            var autoLock by remember { mutableStateOf(false) }
-            SettingSwitch(
-                icon = "🔒",
-                title = "Verrouillage automatique",
-                description = "Verrouiller le scooter à la déconnexion",
-                checked = autoLock,
-                onCheckedChange = {
-                    autoLock = it
-                    // Sauvegarder la préférence
-                }
             )
         }
 
@@ -127,6 +48,7 @@ fun SettingsScreen(
                 checked = batteryAlert,
                 onCheckedChange = {
                     batteryAlert = it
+                    // TODO: Sauvegarder dans les préférences
                 }
             )
         }
@@ -140,6 +62,21 @@ fun SettingsScreen(
                 checked = tempAlert,
                 onCheckedChange = {
                     tempAlert = it
+                    // TODO: Sauvegarder dans les préférences
+                }
+            )
+        }
+
+        item {
+            var disconnectAlert by remember { mutableStateOf(true) }
+            SettingSwitch(
+                icon = "📡",
+                title = "Alerte déconnexion",
+                description = "Notification en cas de perte de connexion",
+                checked = disconnectAlert,
+                onCheckedChange = {
+                    disconnectAlert = it
+                    // TODO: Sauvegarder dans les préférences
                 }
             )
         }
@@ -160,6 +97,7 @@ fun SettingsScreen(
                 checked = keepScreenOn,
                 onCheckedChange = {
                     keepScreenOn = it
+                    // TODO: Sauvegarder dans les préférences
                 }
             )
         }
@@ -173,8 +111,85 @@ fun SettingsScreen(
                 checked = darkMode,
                 onCheckedChange = {
                     darkMode = it
+                    // TODO: Sauvegarder dans les préférences
                 }
             )
+        }
+
+        item {
+            var autoConnect by remember { mutableStateOf(false) }
+            SettingSwitch(
+                icon = "🔗",
+                title = "Connexion automatique",
+                description = "Se reconnecter au dernier scooter",
+                checked = autoConnect,
+                onCheckedChange = {
+                    autoConnect = it
+                    // TODO: Sauvegarder dans les préférences
+                }
+            )
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // UNITÉS
+        // ═══════════════════════════════════════════════════════════════════
+        item {
+            SectionHeader("Unités")
+        }
+
+        item {
+            var useKmh by remember { mutableStateOf(true) }
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF2C2C2E))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "📏",
+                        fontSize = 24.sp,
+                        modifier = Modifier.padding(end = 16.dp)
+                    )
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Unité de vitesse",
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 16.sp,
+                            color = Color.White
+                        )
+                        Text(
+                            text = if (useKmh) "Kilomètres/heure" else "Miles/heure",
+                            fontSize = 13.sp,
+                            color = Color.Gray
+                        )
+                    }
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        TextButton(
+                            onClick = { useKmh = true },
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = if (useKmh) Color(0xFF0A84FF) else Color.Gray
+                            )
+                        ) {
+                            Text("km/h", fontSize = 12.sp, fontWeight = if (useKmh) FontWeight.Bold else FontWeight.Normal)
+                        }
+                        TextButton(
+                            onClick = { useKmh = false },
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = if (!useKmh) Color(0xFF0A84FF) else Color.Gray
+                            )
+                        ) {
+                            Text("mph", fontSize = 12.sp, fontWeight = if (!useKmh) FontWeight.Bold else FontWeight.Normal)
+                        }
+                    }
+                }
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════════
@@ -252,65 +267,6 @@ private fun SectionHeader(title: String) {
             fontWeight = FontWeight.Bold,
             color = Color(0xFF0A84FF)
         )
-    }
-}
-
-@Composable
-private fun SettingButton(
-    icon: String,
-    title: String,
-    description: String,
-    enabled: Boolean,
-    onClick: () -> Unit
-) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = if (enabled) Color(0xFF2C2C2E) else Color(0xFF1C1C1E)
-        )
-    ) {
-        Button(
-            onClick = onClick,
-            enabled = enabled,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color.Transparent,
-                disabledContainerColor = Color.Transparent
-            ),
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = icon,
-                    fontSize = 24.sp,
-                    modifier = Modifier.padding(end = 16.dp)
-                )
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = title,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 16.sp,
-                        color = if (enabled) Color.White else Color.Gray
-                    )
-                    Text(
-                        text = description,
-                        fontSize = 13.sp,
-                        color = Color.Gray
-                    )
-                }
-
-                if (enabled) {
-                    Text(
-                        text = "▶",
-                        color = Color.Gray,
-                        fontSize = 12.sp
-                    )
-                }
-            }
-        }
     }
 }
 
