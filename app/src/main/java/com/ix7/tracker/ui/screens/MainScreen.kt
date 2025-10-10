@@ -149,12 +149,12 @@ fun MainScreen(
 
                 3 -> TripHistoryScreen()
 
-                4 -> TestScreen(
+                4 -> TestScreenOptimized(
                     bluetoothManager = bluetoothManager,
                     isConnected = connectionState == ConnectionState.CONNECTED
                 )
 
-                5 -> SettingsScreen(
+                5 -> RegulatorTestScreen(
                     bluetoothManager = bluetoothManager,
                     isConnected = connectionState == ConnectionState.CONNECTED
                 )

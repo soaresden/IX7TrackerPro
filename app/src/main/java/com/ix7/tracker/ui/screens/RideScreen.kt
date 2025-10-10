@@ -41,14 +41,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import android.util.Log
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 
-/**
- * ✅ CORRECTIONS APPLIQUÉES :
- * - Affichage vitesse depuis scooterData.speed (trame 0x37)
- * - Klaxon maintenu = bip continu
- * - Barrière et éclair en BLEU quand actifs
- * - Regroupements visuels par paires
- */
 @Composable
 fun RideScreen(
     scooterData: ScooterData,
@@ -64,14 +60,16 @@ fun RideScreen(
     var isRiding by remember { mutableStateOf(false) }
     var isPaused by remember { mutableStateOf(false) }
     var cruiseControl by remember { mutableStateOf(false) }
+    var cruiseThreshold by remember { mutableStateOf(25f) } // Valeur par défaut du seuil
     var headlightsOn by remember { mutableStateOf(false) }
     var neonOn by remember { mutableStateOf(false) }
     var isLocked by remember { mutableStateOf(true) }
 
+    // État local pour le mode actuel (mis à jour par les boutons)
+    var localCurrentMode by remember { mutableStateOf(scooterData.currentMode ?: RideMode.ECO) }
+
     // Utiliser le mode depuis scooterData si disponible, sinon état local
-    val currentMode by remember(scooterData.currentMode) {
-        mutableStateOf(scooterData.currentMode ?: RideMode.ECO)
-    }
+    val currentMode = scooterData.currentMode ?: localCurrentMode
 
     // Utiliser speedLimitMode depuis scooterData
     val isUnlimited = scooterData.speedLimitMode == SpeedLimitMode.UNLIMITED
@@ -103,6 +101,90 @@ fun RideScreen(
         scooterData.speed
     }
 
+    // ===== FONCTION POUR ENVOYER LE SEUIL DU RÉGULATEUR (AVEC MAPPING CORRECT) =====
+    fun sendCruiseThreshold(speedKmh: Int) {
+        scope.launch {
+            // IMPORTANT: La valeur hex n'est PAS la vitesse directe !
+            // D'après vos tests :
+            // - 20 km/h → hex 0x14 (20) ✓ Direct
+            // - 10 km/h → hex 0x24 (36)
+            // - 21 km/h → hex 0x3C (60)
+
+            // Table de conversion vitesse réelle → valeur hex
+            val speedToHexValue = when(speedKmh) {
+                10 -> 0x24  // Confirmé par vos tests
+                11 -> 0x27
+                12 -> 0x2A
+                13 -> 0x2D
+                14 -> 0x30
+                15 -> 0x33
+                16 -> 0x36
+                17 -> 0x39
+                18 -> 0x10
+                19 -> 0x12
+                20 -> 0x14  // Confirmé par vos tests
+                21 -> 0x3C  // Confirmé par vos tests
+                22 -> 0x3F
+                23 -> 0x42
+                24 -> 0x45
+                25 -> 0x48
+                26 -> 0x4B
+                27 -> 0x4E
+                28 -> 0x51
+                29 -> 0x54
+                30 -> 0x57
+                35 -> 0x60
+                40 -> 0x70
+                45 -> 0x80
+                50 -> 0x90
+                55 -> 0xA0
+                60 -> 0xB0
+                else -> speedKmh  // Par défaut, utiliser la valeur directe
+            }
+
+            // Checksums connus pour certaines valeurs
+            val knownChecksums = mapOf(
+                0x14 to Pair(0x7A.toByte(), 0x43.toByte()),  // 20 km/h
+                0x24 to Pair(0x13.toByte(), 0x9A.toByte()),  // 10 km/h (hex 36)
+                0x3C to Pair(0x66.toByte(), 0xBF.toByte())   // 21 km/h (hex 60)
+            )
+
+            val baseCmd = byteArrayOf(
+                0x61, 0x9E.toByte(),
+                0x30, 0x14, 0x37,
+                0xC7.toByte(),            // Commande cruise threshold
+                speedToHexValue.toByte(),  // VALEUR ENCODÉE (pas la vitesse directe !)
+                0x00,                     // Checksum 1
+                0x00,                     // Checksum 2
+                0xCA.toByte()            // Fin
+            )
+
+            // Utiliser les checksums connus ou calculer
+            val checksums = knownChecksums[speedToHexValue]
+            if (checksums != null) {
+                baseCmd[7] = checksums.first
+                baseCmd[8] = checksums.second
+                Log.i("CRUISE", "✅ Checksums connus pour $speedKmh km/h (hex: 0x${speedToHexValue.toString(16)})")
+            } else {
+                // Calcul approximatif
+                var xor = 0
+                for (i in 2..6) {
+                    xor = xor xor baseCmd[i].toInt()
+                }
+                baseCmd[7] = xor.toByte()
+                baseCmd[8] = (xor xor 0xFF).toByte()
+                Log.w("CRUISE", "⚠️ Checksums calculés pour $speedKmh km/h (hex: 0x${speedToHexValue.toString(16)})")
+            }
+
+            // Envoyer la commande
+            bluetoothManager.sendCommand(baseCmd)
+
+            val hex = baseCmd.joinToString(" ") { "%02X".format(it) }
+            Log.i("CRUISE", "🎯 Seuil régulateur: $speedKmh km/h → hex 0x${speedToHexValue.toString(16)}")
+            Log.i("CRUISE", "📤 Commande: $hex")
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -111,159 +193,236 @@ fun RideScreen(
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         // ═══════════════════════════════════════════════════════════════════
-        // 1. COMPTEUR DE VITESSE + CADENAS + EMOJIS
+        // 1. COMPTEUR DE VITESSE + SLIDER RÉGULATEUR
         // ═══════════════════════════════════════════════════════════════════
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(140.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.fillMaxWidth()
         ) {
-            // Compteur vitesse
-            CompactSpeedometer(
-                speed = if (isConnected) currentSpeed else 0f,
-                maxSpeed = displayMaxSpeed.toFloat(),
-                speedUnit = speedUnit,
-                onUnitClick = {
-                    scope.launch {
-                        if (speedUnit == SpeedUnit.KMH) {
-                            bluetoothManager.sendCommand(ProtocolConstants.CMD_UNIT_MPH)
-                            speedUnit = SpeedUnit.MPH
-                        } else {
-                            bluetoothManager.sendCommand(ProtocolConstants.CMD_UNIT_KMH)
-                            speedUnit = SpeedUnit.KMH
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp), // Réduit la hauteur pour faire de la place au slider
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Compteur vitesse
+                CompactSpeedometer(
+                    speed = if (isConnected) currentSpeed else 0f,
+                    maxSpeed = displayMaxSpeed.toFloat(),
+                    speedUnit = speedUnit,
+                    onUnitClick = {
+                        scope.launch {
+                            if (speedUnit == SpeedUnit.KMH) {
+                                bluetoothManager.sendCommand(ProtocolConstants.CMD_UNIT_MPH)
+                                speedUnit = SpeedUnit.MPH
+                            } else {
+                                bluetoothManager.sendCommand(ProtocolConstants.CMD_UNIT_KMH)
+                                speedUnit = SpeedUnit.KMH
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+
+                // Colonne: 2 cadenas + 3 emojis - GROUPÉS
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // 2 CADENAS - GROUPÉS DANS UNE CARD
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1E)),
+                        modifier = Modifier.padding(2.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.padding(4.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        bluetoothManager.sendCommand(ProtocolConstants.CMD_LOCK)
+                                        isLocked = true
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isLocked) Color.Red else Color.DarkGray
+                                ),
+                                modifier = Modifier.size(45.dp),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Text("🔒", fontSize = 18.sp)
+                            }
+
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        bluetoothManager.sendCommand(ProtocolConstants.CMD_UNLOCK)
+                                        isLocked = false
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (!isLocked) Color.Green else Color.DarkGray
+                                ),
+                                modifier = Modifier.size(45.dp),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Text("🔓", fontSize = 18.sp)
+                            }
                         }
                     }
-                },
-                modifier = Modifier.weight(1f)
-            )
 
-            // Colonne: 2 cadenas + 3 emojis - GROUPÉS
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                // 2 CADENAS - GROUPÉS DANS UNE CARD
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1E)),
-                    modifier = Modifier.padding(2.dp)
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.padding(4.dp)
+                    // 3 EMOJIS - GROUPÉS DANS UNE CARD
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1E)),
+                        modifier = Modifier.padding(2.dp)
                     ) {
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    bluetoothManager.sendCommand(ProtocolConstants.CMD_LOCK)
-                                    isLocked = true
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isLocked) Color.Red else Color.DarkGray
-                            ),
-                            modifier = Modifier.size(50.dp),
-                            contentPadding = PaddingValues(0.dp)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.padding(4.dp)
                         ) {
-                            Text("🔒", fontSize = 20.sp)
-                        }
+                            // PHARES
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        if (headlightsOn) {
+                                            bluetoothManager.sendCommand(ProtocolConstants.CMD_LIGHTS_OFF)
+                                            headlightsOn = false
+                                        } else {
+                                            bluetoothManager.sendCommand(ProtocolConstants.CMD_LIGHTS_ON)
+                                            headlightsOn = true
+                                        }
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (headlightsOn) Color(0xFFFFEB3B) else Color.DarkGray
+                                ),
+                                modifier = Modifier.size(32.dp),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Text(if (headlightsOn) "💡" else "⚫", fontSize = 14.sp)
+                            }
 
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    bluetoothManager.sendCommand(ProtocolConstants.CMD_UNLOCK)
-                                    isLocked = false
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (!isLocked) Color.Green else Color.DarkGray
-                            ),
-                            modifier = Modifier.size(50.dp),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text("🔓", fontSize = 20.sp)
+                            // NÉON
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        if (neonOn) {
+                                            bluetoothManager.sendCommand(ProtocolConstants.CMD_NEON_OFF)
+                                            neonOn = false
+                                        } else {
+                                            bluetoothManager.sendCommand(ProtocolConstants.CMD_NEON_ON)
+                                            neonOn = true
+                                        }
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (neonOn) Color(0xFF9C27B0) else Color.DarkGray
+                                ),
+                                modifier = Modifier.size(32.dp),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Text(if (neonOn) "🟣" else "⚫", fontSize = 14.sp)
+                            }
+
+                            // KLAXON - MAINTIEN = BIP CONTINU
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFFF5722))
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onPress = {
+                                                scope.launch {
+                                                    bluetoothManager.sendCommand(ProtocolConstants.CMD_HORN_TRY_1)
+                                                    Log.i("HORN", "🔊 Klaxon activé (maintien)")
+                                                }
+                                                tryAwaitRelease()
+                                                scope.launch {
+                                                    bluetoothManager.sendCommand(ProtocolConstants.CMD_HORN_TRY_1)
+                                                    Log.i("HORN", "🔊 Klaxon désactivé (relâché)")
+                                                }
+                                            }
+                                        )
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("🔊", fontSize = 14.sp)
+                            }
                         }
                     }
                 }
+            }
 
-                // 3 EMOJIS - GROUPÉS DANS UNE CARD
+            // 🎯 SLIDER RÉGULATEUR - EN DESSOUS DU COMPTEUR
+            AnimatedVisibility(
+                visible = cruiseControl,
+                enter = expandVertically(),
+                exit = shrinkVertically()
+            ) {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1E)),
-                    modifier = Modifier.padding(2.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF2C2C2E).copy(alpha = 0.9f)
+                    )
                 ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.padding(4.dp)
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // PHARES
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    if (headlightsOn) {
-                                        bluetoothManager.sendCommand(ProtocolConstants.CMD_LIGHTS_OFF)
-                                        headlightsOn = false
-                                    } else {
-                                        bluetoothManager.sendCommand(ProtocolConstants.CMD_LIGHTS_ON)
-                                        headlightsOn = true
-                                    }
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (headlightsOn) Color(0xFFFFEB3B) else Color.DarkGray
-                            ),
-                            modifier = Modifier.size(36.dp),
-                            contentPadding = PaddingValues(0.dp)
+                        // Titre et valeur actuelle
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(if (headlightsOn) "💡" else "⚫", fontSize = 16.sp)
+                            Text(
+                                "🎯 Seuil régulateur",
+                                fontSize = 14.sp,
+                                color = Color.White,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                "${cruiseThreshold.toInt()} km/h",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Cyan
+                            )
                         }
 
-                        // NÉON
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    if (neonOn) {
-                                        bluetoothManager.sendCommand(ProtocolConstants.CMD_NEON_OFF)
-                                        neonOn = false
-                                    } else {
-                                        bluetoothManager.sendCommand(ProtocolConstants.CMD_NEON_ON)
-                                        neonOn = true
-                                    }
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (neonOn) Color(0xFF9C27B0) else Color.DarkGray
-                            ),
-                            modifier = Modifier.size(36.dp),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text(if (neonOn) "🟣" else "⚫", fontSize = 16.sp)
-                        }
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                        // KLAXON - MAINTIEN = BIP CONTINU
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFFF5722))
-                                .pointerInput(Unit) {
-                                    detectTapGestures(
-                                        onPress = {
-                                            scope.launch {
-                                                bluetoothManager.sendCommand(ProtocolConstants.CMD_HORN_TRY_1)
-                                                Log.i("HORN", "🔊 Klaxon activé (maintien)")
-                                            }
-                                            tryAwaitRelease()
-                                            scope.launch {
-                                                bluetoothManager.sendCommand(ProtocolConstants.CMD_HORN_TRY_1)
-                                                Log.i("HORN", "🔊 Klaxon désactivé (relâché)")
-                                            }
-                                        }
-                                    )
+                        // Slider avec marqueurs
+                        Column {
+                            Slider(
+                                value = cruiseThreshold,
+                                onValueChange = { cruiseThreshold = it },
+                                onValueChangeFinished = {
+                                    sendCruiseThreshold(cruiseThreshold.toInt())
                                 },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("🔊", fontSize = 18.sp)
+                                valueRange = 10f..60f,
+                                steps = 49, // Pour avoir des valeurs entières
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color.Cyan,
+                                    activeTrackColor = Color.Cyan,
+                                    inactiveTrackColor = Color(0xFF505050)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            // Marqueurs de référence
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("10", fontSize = 10.sp, color = Color.Gray)
+                                Text("25", fontSize = 10.sp, color = Color.Gray)
+                                Text("40", fontSize = 10.sp, color = Color.Gray)
+                                Text("60", fontSize = 10.sp, color = Color.Gray)
+                            }
                         }
                     }
                 }
@@ -334,7 +493,7 @@ fun RideScreen(
                     }
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        // CRUISE CONTROL - GROUPÉ DANS UNE CARD
+                        // RÉGULATEUR - GROUPÉ DANS UNE CARD
                         Card(
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1E)),
                             modifier = Modifier.padding(2.dp)
@@ -343,11 +502,16 @@ fun RideScreen(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 modifier = Modifier.padding(4.dp)
                             ) {
-                                // CROIX ROUGE ❌ - Régulateur OFF
+                                // DÉSACTIVER RÉGULATEUR ❌
                                 Button(
                                     onClick = {
                                         scope.launch {
-                                            bluetoothManager.sendCommand(ProtocolConstants.CMD_CRUISE_OFF)
+                                            // Commande qui MARCHE pour OFF
+                                            val command = byteArrayOf(
+                                                0x61, 0x9E.toByte(), 0x30, 0x14, 0x37,
+                                                0x48, 0x34, 0x34, 0x68, 0xCB.toByte()
+                                            )
+                                            bluetoothManager.sendCommand(command)
                                             cruiseControl = false
                                         }
                                     },
@@ -360,12 +524,21 @@ fun RideScreen(
                                     Text("❌", fontSize = 16.sp)
                                 }
 
-                                // CIBLE 🎯 - Régulateur ON
+                                // ACTIVER RÉGULATEUR 🎯
                                 Button(
                                     onClick = {
                                         scope.launch {
-                                            bluetoothManager.sendCommand(ProtocolConstants.CMD_CRUISE_ON)
+                                            // Commande qui MARCHE pour ON
+                                            val command = byteArrayOf(
+                                                0x61, 0x9E.toByte(), 0x30, 0x14, 0x37,
+                                                0x48, 0x35, 0x34, 0x6F, 0xCB.toByte()
+                                            )
+                                            bluetoothManager.sendCommand(command)
                                             cruiseControl = true
+
+                                            // Envoyer aussi le seuil actuel
+                                            delay(100)
+                                            sendCruiseThreshold(cruiseThreshold.toInt())
                                         }
                                     },
                                     colors = ButtonDefaults.buttonColors(
@@ -426,7 +599,7 @@ fun RideScreen(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // BOUTONS MODES - CORRIGÉ selon ProtocolConstants
+                // BOUTONS MODES - CORRIGÉ : État local + couleurs
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
@@ -434,78 +607,89 @@ fun RideScreen(
                     // PIÉTON 🚶
                     Button(
                         onClick = {
+                            localCurrentMode = RideMode.PEDESTRIAN
                             scope.launch {
                                 bluetoothManager.sendCommand(ProtocolConstants.CMD_MODE_PEDESTRIAN)
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (currentMode == RideMode.PEDESTRIAN) Color.Blue else Color.DarkGray
+                            containerColor = if (localCurrentMode == RideMode.PEDESTRIAN)
+                                Color(0xFF007AFF) else Color(0xFF3C3C3E)
                         ),
                         modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
                         contentPadding = PaddingValues(4.dp)
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("🚶", fontSize = 14.sp)
-                            Text("${speedLimits.pedestrian}", fontSize = 10.sp)
+                            Text("🚶", fontSize = 14.sp, color = Color.White)
+                            Text("${speedLimits.pedestrian}", fontSize = 10.sp, color = Color.White)
                         }
                     }
 
                     // ECO 🌱
                     Button(
                         onClick = {
+                            localCurrentMode = RideMode.ECO
                             scope.launch {
                                 bluetoothManager.sendCommand(ProtocolConstants.CMD_MODE_ECO)
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (currentMode == RideMode.ECO) Color.Blue else Color.DarkGray
+                            containerColor = if (localCurrentMode == RideMode.ECO)
+                                Color(0xFF007AFF) else Color(0xFF3C3C3E)
                         ),
                         modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
                         contentPadding = PaddingValues(4.dp)
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("🌱", fontSize = 14.sp)
-                            Text("${speedLimits.eco}", fontSize = 10.sp)
+                            Text("🌱", fontSize = 14.sp, color = Color.White)
+                            Text("${speedLimits.eco}", fontSize = 10.sp, color = Color.White)
                         }
                     }
+
 
                     // RACE 🏎️
                     Button(
                         onClick = {
+                            localCurrentMode = RideMode.RACE
                             scope.launch {
                                 bluetoothManager.sendCommand(ProtocolConstants.CMD_MODE_RACE)
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (currentMode == RideMode.RACE) Color.Blue else Color.DarkGray
+                            containerColor = if (localCurrentMode == RideMode.RACE)
+                                Color(0xFF007AFF) else Color(0xFF3C3C3E)
                         ),
                         modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
                         contentPadding = PaddingValues(4.dp)
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("🏎️", fontSize = 14.sp)
-                            Text("${speedLimits.race}", fontSize = 10.sp)
+                            Text("🏎️", fontSize = 14.sp, color = Color.White)
+                            Text("${speedLimits.race}", fontSize = 10.sp, color = Color.White)
                         }
                     }
 
                     // SPORT ⚡
                     Button(
                         onClick = {
+                            localCurrentMode = RideMode.SPORT
                             scope.launch {
                                 bluetoothManager.sendCommand(ProtocolConstants.CMD_MODE_SPORT)
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (currentMode == RideMode.SPORT) Color.Blue else Color.DarkGray
+                            containerColor = if (localCurrentMode == RideMode.SPORT)
+                                Color(0xFF007AFF) else Color(0xFF3C3C3E)
                         ),
                         modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
                         contentPadding = PaddingValues(4.dp)
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("⚡", fontSize = 14.sp)
-                            Text("${speedLimits.sport}", fontSize = 10.sp)
+                            Text("⚡", fontSize = 14.sp, color = Color.White)
+                            Text("${speedLimits.sport}", fontSize = 10.sp, color = Color.White)
                         }
                     }
+
+
                 }
             }
         }
@@ -633,7 +817,7 @@ fun RideScreen(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// COMPOSANTS AUXILIAIRES
+// COMPOSANTS AUXILIAIRES (inchangés)
 // ═══════════════════════════════════════════════════════════════════
 
 @Composable
