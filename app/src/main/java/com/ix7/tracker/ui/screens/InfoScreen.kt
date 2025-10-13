@@ -82,26 +82,35 @@ fun InfoScreen(scooterData: ScooterData, isConnected: Boolean) {
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 // CONFIGURATION
+                // CONFIGURATION
                 CompactInfoCard(title = "Configuration") {
                     InfoLine(
                         "Mode",
-                        when (scooterData.currentMode?.name) {
-                            "PEDESTRIAN" -> "🚶 Piéton"
-                            "ECO" -> "🌱 Eco"
-                            "SPORT" -> "⚡ Sport"
-                            "RACE" -> "🏎️ Race"
-                            else -> "N/A"
+                        if (!isConnected) {
+                            "-"
+                        } else {
+                            when (scooterData.currentMode?.name) {
+                                "PEDESTRIAN" -> "🚶 Piéton"
+                                "ECO" -> "🌱 Eco"
+                                "SPORT" -> "⚡ Sport"
+                                "RACE" -> "🏎️ Race"
+                                else -> "-"
+                            }
                         }
                     )
                     InfoLine(
                         "Limite",
-                        when (scooterData.speedLimitMode?.name) {
-                            "LIMITED" -> "🚧 Bridé"
-                            "UNLIMITED" -> "⚡ Débridé"
-                            else -> "N/A"
+                        if (!isConnected) {
+                            "-"
+                        } else {
+                            when (scooterData.speedLimitMode?.name) {
+                                "LIMITED" -> "🚧 Bridé"
+                                "UNLIMITED" -> "⚡ Débridé"
+                                else -> "-"
+                            }
                         }
                     )
-                }
+                }   
 
                 // VERSIONS
                 CompactInfoCard(title = "Versions") {
