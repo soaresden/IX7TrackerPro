@@ -1,65 +1,46 @@
 package com.ix7.tracker.bluetooth
 
-import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothGatt
-import android.bluetooth.BluetoothGattCallback
-import android.bluetooth.BluetoothGattCharacteristic
-import android.bluetooth.BluetoothGattDescriptor
-import android.bluetooth.BluetoothProfile
+import android.bluetooth.*
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.ix7.tracker.core.ConnectionState
-import com.ix7.tracker.core.RideMode
 import com.ix7.tracker.core.ScooterData
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.util.UUID
 import com.ix7.tracker.core.SpeedLimitMode
-import com.ix7.tracker.core.WheelMode
 import com.ix7.tracker.protocol.ProtocolConstants
+import com.ix7.tracker.protocol.ScooterDataParser // 🔥 NOUVEAU IMPORT
+import kotlinx.coroutines.*
+import java.util.*
+import com.ix7.tracker.core.WheelMode
+
 
 /**
- * Connecteur Bluetooth pour le protocole 61 9E (iX7 Pro)
- * VERSION CORRIGÉE - Octobre 2025
- *
- * CORRECTIONS APPLIQUÉES :
- * - ✅ Commandes néon corrigées (C5-35-34 / C5-34-34)
- * - ✅ Ajout commandes modes roues (à tester)
- * - ❓ Commande klaxon (à tester)
- * - ❓ Commandes bridé/débridé (à tester)
+ * Gestionnaire de connexion Bluetooth GATT
+ * VERSION MODIFIÉE - Utilise ScooterDataParser
  */
 class BluetoothConnector(
     private val context: Context,
     private val onDataReceived: (ScooterData) -> Unit,
     private val onStateChange: (ConnectionState) -> Unit
 ) {
+
     companion object {
         private const val TAG = "BT_CONNECTOR"
 
-        // UUIDs Nordic UART Service
+        // UUIDs M0Robot
         private val SERVICE_UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
-        private val TX_CHAR_UUID = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e") // Write
-        private val RX_CHAR_UUID = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e") // Notify
+        private val TX_CHAR_UUID = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
+        private val RX_CHAR_UUID = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e")
         private val CCCD_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
-        // Intervalles
-        private const val POLLING_INTERVAL_MS = 1500L
-        private const val INIT_SEQUENCE_DELAY_MS = 300L
+        // Commandes init
+        private val CMD_INIT_1 = byteArrayOf(0x61, 0x9E.toByte(), 0x02, 0x14, 0x55, 0x01, 0xCC.toByte(), 0xCB.toByte())
+        private val CMD_KEEP_ALIVE = byteArrayOf(0x61, 0x9E.toByte(), 0x37, 0x14, 0x55, 0xDE.toByte(), 0x3C, 0xBD.toByte(), 0xCA.toByte())
 
-        // Commandes de base (en dur)
-        private val CMD_KEEP_ALIVE = byteArrayOf(
-            0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x00, 0x00, 0x34, 0xFF.toByte(), 0xCB.toByte()
-        )
-
-        private val CMD_INIT_1 = byteArrayOf(
-            0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x00, 0x00, 0x34, 0xFF.toByte(), 0xCB.toByte()
-        )
+        // Timings
+        private const val INIT_SEQUENCE_DELAY_MS = 500L
+        private const val POLLING_INTERVAL_MS = 500L
     }
 
     private var bluetoothGatt: BluetoothGatt? = null
@@ -68,8 +49,6 @@ class BluetoothConnector(
 
     private val handler = Handler(Looper.getMainLooper())
     private val scope = CoroutineScope(Dispatchers.IO)
-
-    private val dataHandler = BluetoothDataHandler()
     private var currentScooterData = ScooterData()
 
     private var isPolling = false
@@ -107,7 +86,9 @@ class BluetoothConnector(
             characteristic: BluetoothGattCharacteristic?
         ) {
             characteristic?.value?.let { data ->
-                val scooterData = dataHandler.handleData(data)
+                // 🔥 UTILISE ScooterDataParser au lieu de dataHandler
+                val scooterData = ScooterDataParser.parseFrame(data, currentScooterData)
+
                 if (scooterData != null) {
                     currentScooterData = scooterData
                     onDataReceived(scooterData)
@@ -235,10 +216,8 @@ class BluetoothConnector(
         Log.i(TAG, "🎨 Néon ${if (enabled) "ON" else "OFF"}")
 
         val command = if (enabled) {
-            // ✅ NOUVEAU: 61 9E 30 14 37 C5 35 34 D0 CA
             byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xC5.toByte(), 0x35, 0x34, 0xD0.toByte(), 0xCA.toByte())
         } else {
-            // ✅ NOUVEAU: 61 9E 30 14 37 C5 34 34 D3 CA
             byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xC5.toByte(), 0x34, 0x34, 0xD3.toByte(), 0xCA.toByte())
         }
 
@@ -253,7 +232,6 @@ class BluetoothConnector(
     fun setLights(enabled: Boolean) {
         Log.i(TAG, "💡 Lumières ${if (enabled) "ON" else "OFF"}")
 
-        // C6-35 = ON, C6-34 = OFF
         val command = if (enabled) {
             byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xC6.toByte(), 0x35, 0x34, 0xD1.toByte(), 0xCA.toByte())
         } else {
@@ -266,102 +244,56 @@ class BluetoothConnector(
     }
 
     /**
-     * ❓ Klaxon - À TESTER
-     * Tentative basée sur le pattern des autres commandes
+     * ✅ Verrouillage
      */
-    fun horn() {
-        Log.i(TAG, "🔊 Klaxon TEST")
+    fun setLock(locked: Boolean) {
+        Log.i(TAG, "🔒 ${if (locked) "Verrouillage" else "Déverrouillage"}")
 
-        // Tester différentes commandes
-        val command = ProtocolConstants.CMD_HORN_TRY_1
-
-        scope.launch {
-            sendCommand(command)
-        }
-    }
-
-    /**
-     * ✅ Modes de conduite (déjà corrects)
-     */
-    fun setRideMode(mode: RideMode) {
-        Log.i(TAG, "🏍️ Mode → $mode")
-
-        currentScooterData = currentScooterData.copy(currentMode = mode)
-
-        val command = when (mode) {
-            RideMode.PEDESTRIAN -> {
-                // 61 9E 30 14 37 49 37 34 6C CB
-                byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x49, 0x37, 0x34, 0x6C, 0xCB.toByte())
-            }
-            RideMode.ECO -> {
-                // 61 9E 30 14 37 48 36 34 6E CB
-                byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x48, 0x36, 0x34, 0x6E, 0xCB.toByte())
-            }
-            RideMode.SPORT -> {
-                // 61 9E 30 14 37 4A 36 34 6C CB
-                byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4A, 0x36, 0x34, 0x6C, 0xCB.toByte())
-            }
-            RideMode.RACE -> {
-                // 61 9E 30 14 37 4A 36 34 6C CB (même que SPORT ?)
-                byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4A, 0x36, 0x34, 0x6C, 0xCB.toByte())
-            }
+        val command = if (locked) {
+            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4B, 0x35, 0x34, 0x6C, 0xCB.toByte())
+        } else {
+            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4B, 0x34, 0x34, 0x6D, 0xCB.toByte())
         }
 
         scope.launch {
             sendCommand(command)
         }
     }
-
     /**
-     * ❓ Mode roues - À TESTER
-     * Ces commandes sont des hypothèses basées sur le pattern
+     * ✅ Mode 1 roue / 2 roues
      */
     fun setWheelMode(mode: WheelMode) {
-        Log.i(TAG, "🛴 Mode roues → $mode")
+        Log.i(TAG, "🏍️ Mode roues: $mode")
 
-        // Pas besoin de mettre à jour currentScooterData
-        // Le mode roues est géré uniquement dans l'UI
-
-        // TODO: Trouver les vraies commandes
         val command = when (mode) {
-            WheelMode.ONE_WHEEL -> {
-                // Tentative 1 roue
-                byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4D, 0x35, 0x34, 0x6E, 0xCB.toByte())
-            }
-            WheelMode.TWO_WHEELS -> {
-                // Tentative 2 roues
-                byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4E, 0x35, 0x34, 0x6F, 0xCB.toByte())
-            }
+            WheelMode.ONE_WHEEL -> byteArrayOf(
+                0x61, 0x9E.toByte(), 0x3C, 0x17, 0x35,
+                0x8F.toByte(), 0x35, 0x35, 0x34, 0x34, 0x34, 0x34, 0x22, 0xCB.toByte()
+            )
+            WheelMode.TWO_WHEELS -> byteArrayOf(
+                0x61, 0x9E.toByte(), 0x3C, 0x17, 0x35,
+                0x8F.toByte(), 0x36, 0x35, 0x34, 0x34, 0x34, 0x34, 0x21, 0xCB.toByte()
+            )
         }
 
         scope.launch {
             sendCommand(command)
         }
     }
+    /**
+     * Mode 1 roue / 2 roues
+     */
 
     /**
-     * ❓ Mode limitation vitesse - À TESTER
+     * Mode limiteur de vitesse (bridé/débridé)
      */
-    suspend fun setSpeedLimitMode(mode: SpeedLimitMode) {
-        Log.d(TAG, "⚡ Mode limitation → $mode")
-
-        // Mettre à jour UNIQUEMENT l'état local
-        currentScooterData = currentScooterData.copy(
-            speedLimitMode = mode
-            // NE PAS toucher à speedUnit ici !
-        )
-        onDataReceived(currentScooterData)
+    fun setSpeedLimitMode(mode: SpeedLimitMode) {
+        Log.i(TAG, "🚦 Mode: $mode")
 
         // TODO: Trouver les vraies commandes
-        // Pour l'instant, commenter l'envoi de commande
-        /*
-        val command = if (mode == SpeedLimitMode.UNLIMITED) {
-            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x15, 0x37, 0x2F, 0x35, 0x34, 0x8F.toByte(), 0xCB.toByte())
-        } else {
-            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x15, 0x37, 0x2F, 0x34, 0x34, 0x88.toByte(), 0xCB.toByte())
-        }
-        sendCommand(command)
-        */
+        // Pour l'instant, on met juste à jour localement
+        currentScooterData = currentScooterData.copy(speedLimitMode = mode)
+        onDataReceived(currentScooterData)
     }
 
     // Nettoyage
@@ -371,7 +303,6 @@ class BluetoothConnector(
         handler.removeCallbacksAndMessages(null)
         bluetoothGatt?.close()
         bluetoothGatt = null
-        dataHandler.reset()
         Log.d(TAG, "🧹 Nettoyage terminé")
     }
 }
