@@ -35,7 +35,6 @@ object ProtocolUtils {
 
     /**
      * Construit une commande complète avec header et checksum
-     * Format: 55 AA [length] [command] [data...] [checksum]
      */
     fun buildCommand(command: Byte, data: ByteArray = byteArrayOf()): ByteArray {
         val length = (1 + data.size).toByte() // command + data

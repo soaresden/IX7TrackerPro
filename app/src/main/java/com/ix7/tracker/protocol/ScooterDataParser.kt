@@ -9,7 +9,6 @@ import com.ix7.tracker.core.SpeedLimitMode
  * Parser pour décoder les trames de données de la trottinette M0Robot
  *
  * Basé sur l'analyse des logs Bluetooth et du protocole M0Robot
- * Structure générale: 61 9E [TYPE] [LENGTH] [DATA...] [CHECKSUM]
  *
  * Types de trames principaux:
  * - 0x37: Données en temps réel (vitesse, batterie, tension, température)
@@ -85,7 +84,6 @@ object ScooterDataParser {
      * - États (phares, verrouillage, etc.) (byte 21)
      * - Temps de trajet total (bytes 26-29)
      *
-     * Format: 61 9E 37 14 [DATA...] CA
      */
     private fun parseRealtimeFrame(frame: ByteArray, current: ScooterData): ScooterData {
         if (frame.size < 30) {

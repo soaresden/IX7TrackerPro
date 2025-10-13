@@ -18,6 +18,10 @@ import com.ix7.tracker.protocol.ProtocolConstants
 import com.ix7.tracker.ui.components.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.ix7.tracker.tracker.TripRecorder
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
+import android.location.Location
 
 @Composable
 fun RideScreen(
@@ -48,6 +52,15 @@ fun RideScreen(
     val currentMode = scooterData.currentMode ?: localCurrentMode
     val isUnlimited = scooterData.speedLimitMode == SpeedLimitMode.UNLIMITED
 
+    val tripRecorder = remember { TripRecorder(context) }
+    val isRecordingTrip by tripRecorder.isRecording.collectAsState()
+    var lastLocation by remember { mutableStateOf<Location?>(null) }
+
+    // Location provider
+    val fusedLocationClient = remember {
+        LocationServices.getFusedLocationProviderClient(context)
+    }
+
     // ===== VITESSES LIMITES =====
     val speedLimits = when {
         isUnlimited && wheelMode == WheelMode.ONE_WHEEL -> SpeedLimits(20, 30, 40, 50)
@@ -61,6 +74,8 @@ fun RideScreen(
         RideMode.SPORT -> speedLimits.sport
         RideMode.RACE -> speedLimits.race
     }
+
+
 
     val displayMaxSpeed = if (speedUnit == SpeedUnit.MPH) (maxSpeed * 0.621371).toInt() else maxSpeed
     val currentSpeed = if (speedUnit == SpeedUnit.MPH) {
@@ -77,6 +92,13 @@ fun RideScreen(
             Log.d("RideScreen", "🔍 Scan de serrure démarré")
         } catch (e: Exception) {
             Log.e("RideScreen", "❌ Erreur démarrage scan: ${e.message}")
+        }
+    }
+
+    // Mettre à jour la vitesse pendant l'enregistrement
+    LaunchedEffect(isRecordingTrip, scooterData.speed) {
+        if (isRecordingTrip) {
+            tripRecorder.updateSpeed(scooterData.speed)
         }
     }
 
@@ -353,6 +375,10 @@ fun RideScreen(
             currentSpeed = currentSpeed,
             currentBattery = scooterData.battery,
             maxSpeed = displayMaxSpeed.toFloat(),
+            scooterData = scooterData,
+            currentMode = localCurrentMode,
+            wheelMode = wheelMode,
+            isUnlimited = isUnlimited,
             onStart = { isRiding = true; isPaused = false },
             onPauseToggle = { isPaused = !isPaused },
             onStop = { isRiding = false; isPaused = false }

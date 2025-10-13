@@ -7,7 +7,6 @@ package com.ix7.tracker.protocol
  * - Code source de l'appli officielle
  * - Tests empiriques
  *
- * STRUCTURE CONFIRMÉE : 61 9E [TYPE] [LENGTH] [DATA...] [CHECKSUM]
  */
 object M0RobotCommandsFinal {
 

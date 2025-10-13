@@ -1,5 +1,7 @@
 package com.ix7.tracker.ui.components
 
+import android.location.Location
+import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -9,8 +11,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ix7.tracker.data.*
+import com.ix7.tracker.tracker.TripRecorder
+import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.launch
 
 @Composable
@@ -20,18 +26,38 @@ fun ModGraphView(
     currentSpeed: Float,
     currentBattery: Float,
     maxSpeed: Float,
+    scooterData: com.ix7.tracker.core.ScooterData,
+    currentMode: com.ix7.tracker.core.RideMode,
+    wheelMode: com.ix7.tracker.core.WheelMode,
+    isUnlimited: Boolean,
     onStart: () -> Unit,
     onPauseToggle: () -> Unit,
     onStop: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val tripRecorder = remember { TripRecorder(context) }
+    val isRecordingTrip by tripRecorder.isRecording.collectAsState()
+    var lastLocation by remember { mutableStateOf<Location?>(null) }
+
+    val fusedLocationClient = remember {
+        LocationServices.getFusedLocationProviderClient(context)
+    }
+
     var speedHistory by remember { mutableStateOf(listOf<Float>()) }
     var batteryHistory by remember { mutableStateOf(listOf<Float>()) }
 
+    // Mettre à jour l'historique ET le recorder
     LaunchedEffect(isRiding, currentSpeed, currentBattery) {
         if (isRiding && !isPaused) {
             speedHistory = speedHistory.takeLast(49) + currentSpeed
             batteryHistory = batteryHistory.takeLast(49) + currentBattery
+
+            // Enregistrer la vitesse dans le trip
+            if (isRecordingTrip) {
+                tripRecorder.updateSpeed(currentSpeed)
+            }
         }
         if (!isRiding) {
             speedHistory = emptyList()
@@ -87,7 +113,38 @@ fun ModGraphView(
         ) {
             // PLAY ▶
             Button(
-                onClick = onStart,
+                onClick = {
+                    onStart()
+
+                    // Démarrer l'enregistrement du trajet
+                    try {
+                        fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                            lastLocation = location
+
+                            tripRecorder.startTrip(
+                                battery = scooterData.battery.toInt(),
+                                odometer = scooterData.odometer,
+                                location = location,
+                                settings = TripSettings(
+                                    ridingMode = when(currentMode) {
+                                        com.ix7.tracker.core.RideMode.PEDESTRIAN -> RidingMode.PEDESTRIAN
+                                        com.ix7.tracker.core.RideMode.ECO -> RidingMode.ECO
+                                        com.ix7.tracker.core.RideMode.SPORT -> RidingMode.SPORT
+                                        com.ix7.tracker.core.RideMode.RACE -> RidingMode.RACE
+                                    },
+                                    driveMode = when(wheelMode) {
+                                        com.ix7.tracker.core.WheelMode.ONE_WHEEL -> DriveMode.ONE_WHEEL
+                                        com.ix7.tracker.core.WheelMode.TWO_WHEELS -> DriveMode.TWO_WHEELS
+                                    },
+                                    speedLock = if (isUnlimited) SpeedLock.UNLOCKED else SpeedLock.LOCKED
+                                )
+                            )
+                            Log.i("ModGraphView", "🟢 Enregistrement démarré")
+                        }
+                    } catch (e: Exception) {
+                        Log.e("ModGraphView", "❌ Erreur location: ${e.message}")
+                    }
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Green),
                 enabled = !isRiding || isPaused,
                 modifier = Modifier.weight(1f).padding(horizontal = 2.dp)
@@ -97,7 +154,17 @@ fun ModGraphView(
 
             // PAUSE ⏸
             Button(
-                onClick = onPauseToggle,
+                onClick = {
+                    onPauseToggle()
+
+                    if (!isPaused) {
+                        tripRecorder.pauseTrip()
+                        Log.i("ModGraphView", "⏸️ Trajet en pause")
+                    } else {
+                        tripRecorder.resumeTrip()
+                        Log.i("ModGraphView", "▶️ Trajet repris")
+                    }
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9500)),
                 enabled = isRiding,
                 modifier = Modifier.weight(1f).padding(horizontal = 2.dp)
@@ -107,7 +174,32 @@ fun ModGraphView(
 
             // STOP ⏹
             Button(
-                onClick = onStop,
+                onClick = {
+                    onStop()
+
+                    // Arrêter et sauvegarder le trajet
+                    scope.launch {
+                        try {
+                            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                                lastLocation = location
+
+                                scope.launch {
+                                    val savedTrip = tripRecorder.stopTrip(
+                                        battery = scooterData.battery.toInt(),
+                                        odometer = scooterData.odometer,
+                                        location = location
+                                    )
+
+                                    if (savedTrip != null) {
+                                        Log.i("ModGraphView", "✅ Trajet sauvegardé: ${savedTrip.distance}km en ${savedTrip.duration}s")
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e("ModGraphView", "❌ Erreur sauvegarde: ${e.message}")
+                        }
+                    }
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
                 enabled = isRiding,
                 modifier = Modifier.weight(1f).padding(horizontal = 2.dp)

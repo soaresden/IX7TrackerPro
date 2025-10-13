@@ -86,7 +86,7 @@ class BluetoothConnector(
             characteristic: BluetoothGattCharacteristic?
         ) {
             characteristic?.value?.let { data ->
-                // 🔥 UTILISE ScooterDataParser au lieu de dataHandler
+                // 🔥 NOUVEAU : Utilise ScooterDataParser au lieu de BluetoothDataHandler
                 val scooterData = ScooterDataParser.parseFrame(data, currentScooterData)
 
                 if (scooterData != null) {
