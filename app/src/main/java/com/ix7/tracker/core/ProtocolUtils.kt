@@ -29,8 +29,8 @@ object ProtocolUtils {
      */
     fun isValidFrame(data: ByteArray): Boolean {
         return data.size >= 5 &&
-                data[0] == ProtocolConstants.FRAME_HEADER_1 &&
-                data[1] == ProtocolConstants.FRAME_HEADER_2
+                data[0] == ProtocolSimple.FRAME_HEADER_1 &&
+                data[1] == ProtocolSimple.FRAME_HEADER_2
     }
 
     /**
@@ -41,8 +41,8 @@ object ProtocolUtils {
 
         // Construire la trame sans checksum
         val frame = byteArrayOf(
-            ProtocolConstants.FRAME_HEADER_1,
-            ProtocolConstants.FRAME_HEADER_2,
+            ProtocolSimple.FRAME_HEADER_1,
+            ProtocolSimple.FRAME_HEADER_2,
             length,
             command
         ) + data + 0x00.toByte() // Placeholder pour checksum
@@ -71,7 +71,7 @@ object ProtocolUtils {
      */
     fun buildDataRequest(): ByteArray {
         return buildCommand(
-            ProtocolConstants.CMD_REQUEST_DATA,
+            ProtocolSimple.CMD_REQUEST_DATA,
             byteArrayOf(0x01, 0x00)
         )
     }
@@ -81,7 +81,7 @@ object ProtocolUtils {
      * Format: 55 AA 02 03 01
      */
     fun buildVersionRequest(): ByteArray {
-        return buildCommand(ProtocolConstants.CMD_GET_VERSION)
+        return buildCommand(ProtocolSimple.CMD_GET_VERSION)
     }
 
     /**
@@ -89,7 +89,7 @@ object ProtocolUtils {
      * Format: 55 AA 01 00 56
      */
     fun buildKeepAlive(): ByteArray {
-        return buildCommand(ProtocolConstants.CMD_KEEP_ALIVE)
+        return buildCommand(ProtocolSimple.CMD_KEEP_ALIVE)
     }
 
     /**

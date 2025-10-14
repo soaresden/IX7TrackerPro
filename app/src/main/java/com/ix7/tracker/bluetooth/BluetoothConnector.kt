@@ -8,16 +8,15 @@ import android.util.Log
 import com.ix7.tracker.core.ConnectionState
 import com.ix7.tracker.core.ScooterData
 import com.ix7.tracker.core.SpeedLimitMode
-import com.ix7.tracker.protocol.ProtocolConstants
-import com.ix7.tracker.protocol.ScooterDataParser // 🔥 NOUVEAU IMPORT
+import com.ix7.tracker.protocol.DebugParser // 🔥 NOUVEAU IMPORT
 import kotlinx.coroutines.*
 import java.util.*
 import com.ix7.tracker.core.WheelMode
-
+import com.ix7.tracker.protocol.ProtocolSimple
 
 /**
  * Gestionnaire de connexion Bluetooth GATT
- * VERSION MODIFIÉE - Utilise ScooterDataParser
+ * VERSION MODIFIÉE - Utilise DebugParser
  */
 class BluetoothConnector(
     private val context: Context,
@@ -26,22 +25,21 @@ class BluetoothConnector(
     private val onRawDataReceived: ((ByteArray) -> Unit)? = null  // ✅ CETTE LIGNE DOIT ÊTRE LÀ
 ) {
 
+
+
     companion object {
         private const val TAG = "BT_CONNECTOR"
 
-        // UUIDs M0Robot
-        private val SERVICE_UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
-        private val TX_CHAR_UUID = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
-        private val RX_CHAR_UUID = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e")
+        // Utiliser les constantes centralisées
+        private val SERVICE_UUID = UUID.fromString(ProtocolSimple.SERVICE_UUID)
+        private val TX_CHAR_UUID = UUID.fromString(ProtocolSimple.TX_CHAR_UUID)
+        private val RX_CHAR_UUID = UUID.fromString(ProtocolSimple.RX_CHAR_UUID)
         private val CCCD_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
-
-        // Commandes init
-        private val CMD_INIT_1 = byteArrayOf(0x61, 0x9E.toByte(), 0x02, 0x14, 0x55, 0x01, 0xCC.toByte(), 0xCB.toByte())
-        private val CMD_KEEP_ALIVE = byteArrayOf(0x61, 0x9E.toByte(), 0x37, 0x14, 0x55, 0xDE.toByte(), 0x3C, 0xBD.toByte(), 0xCA.toByte())
-
         // Timings
         private const val INIT_SEQUENCE_DELAY_MS = 500L
         private const val POLLING_INTERVAL_MS = 500L
+
+
     }
 
     private var bluetoothGatt: BluetoothGatt? = null
@@ -96,8 +94,8 @@ class BluetoothConnector(
                 onRawDataReceived?.invoke(data)
                 android.util.Log.d("BT_CONNECTOR", "✅ onRawDataReceived invoqué")
 
-                // 🔥 NOUVEAU : Utilise ScooterDataParser au lieu de BluetoothDataHandler
-                val scooterData = ScooterDataParser.parseFrame(data, currentScooterData)
+                // 🔥 NOUVEAU : Utilise DebugParser au lieu de BluetoothDataHandler
+                val scooterData = DebugParser.parseFrame(data, currentScooterData)
 
                 if (scooterData != null) {
                     currentScooterData = scooterData
@@ -151,7 +149,7 @@ class BluetoothConnector(
     private suspend fun startInitSequence() {
         Log.i(TAG, "🚀 Séquence d'initialisation...")
 
-        sendCommand(CMD_INIT_1)
+        sendCommand(ProtocolSimple.CMD_INIT_1)
         delay(INIT_SEQUENCE_DELAY_MS)
 
         Log.i(TAG, "✅ Initialisation terminée")
@@ -169,7 +167,7 @@ class BluetoothConnector(
             override fun run() {
                 if (isPolling) {
                     scope.launch {
-                        sendCommand(CMD_KEEP_ALIVE)
+                        sendCommand(ProtocolSimple.CMD_KEEP_ALIVE)
                     }
                     handler.postDelayed(this, POLLING_INTERVAL_MS)
                 }
@@ -188,29 +186,28 @@ class BluetoothConnector(
     }
 
     // Envoi de commande
-    suspend fun sendCommand(command: ByteArray): Result<Unit> {
+    suspend fun sendCommand(command: ByteArray): Result<Unit> = withContext(Dispatchers.IO) {
         val hex = command.joinToString(" ") { "%02X".format(it) }
         Log.d(TAG, "📤 Envoi: $hex")
 
         if (writeCharacteristic == null || bluetoothGatt == null) {
             Log.e(TAG, "❌ Characteristic ou GATT null")
-            return Result.failure(Exception("Not connected"))
+            return@withContext Result.failure(Exception("Not connected"))
         }
 
-        return withContext(Dispatchers.IO) {
-            try {
-                writeCharacteristic?.value = command
-                val success = bluetoothGatt?.writeCharacteristic(writeCharacteristic)
+        try {
+            val characteristic = writeCharacteristic!!
+            characteristic.value = command
+            val success = bluetoothGatt?.writeCharacteristic(characteristic)
 
-                if (success == true) {
-                    Result.success(Unit)
-                } else {
-                    Result.failure(Exception("Write failed"))
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "❌ Exception dans sendCommand", e)
-                Result.failure(e)
+            if (success == true) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Write failed"))
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Exception dans sendCommand", e)
+            Result.failure(e)
         }
     }
 
@@ -226,9 +223,9 @@ class BluetoothConnector(
         Log.i(TAG, "🎨 Néon ${if (enabled) "ON" else "OFF"}")
 
         val command = if (enabled) {
-            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xC5.toByte(), 0x35, 0x34, 0xD0.toByte(), 0xCA.toByte())
+            ProtocolSimple.CMD_NEON_ON
         } else {
-            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xC5.toByte(), 0x34, 0x34, 0xD3.toByte(), 0xCA.toByte())
+            ProtocolSimple.CMD_NEON_OFF
         }
 
         scope.launch {
@@ -243,9 +240,9 @@ class BluetoothConnector(
         Log.i(TAG, "💡 Lumières ${if (enabled) "ON" else "OFF"}")
 
         val command = if (enabled) {
-            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xC6.toByte(), 0x35, 0x34, 0xD1.toByte(), 0xCA.toByte())
+            ProtocolSimple.CMD_LIGHTS_ON
         } else {
-            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0xC6.toByte(), 0x34, 0x34, 0xD2.toByte(), 0xCA.toByte())
+            ProtocolSimple.CMD_LIGHTS_OFF
         }
 
         scope.launch {
@@ -260,15 +257,16 @@ class BluetoothConnector(
         Log.i(TAG, "🔒 ${if (locked) "Verrouillage" else "Déverrouillage"}")
 
         val command = if (locked) {
-            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4B, 0x35, 0x34, 0x6C, 0xCB.toByte())
+            ProtocolSimple.CMD_LOCK
         } else {
-            byteArrayOf(0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4B, 0x34, 0x34, 0x6D, 0xCB.toByte())
+            ProtocolSimple.CMD_UNLOCK
         }
 
         scope.launch {
             sendCommand(command)
         }
     }
+
     /**
      * ✅ Mode 1 roue / 2 roues
      */

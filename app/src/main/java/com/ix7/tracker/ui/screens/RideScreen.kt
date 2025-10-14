@@ -14,7 +14,6 @@ import androidx.compose.ui.unit.dp
 import com.ix7.tracker.bluetooth.BluetoothRepository
 import com.ix7.tracker.bluetooth.LockManager
 import com.ix7.tracker.core.*
-import com.ix7.tracker.protocol.ProtocolConstants
 import com.ix7.tracker.ui.components.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -22,19 +21,9 @@ import com.ix7.tracker.tracker.TripRecorder
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import android.location.Location
+import com.ix7.tracker.protocol.ProtocolSimple
 
-/**
- * 🎯 ÉCRAN RIDE CORRIGÉ
- *
- * Ce fichier utilise les données provenant de ScooterData qui sont maintenant
- * décodées avec les VRAIS offsets validés par l'analyse du log:
- *
- * - scooterData.battery → provient de 0x20[45], 0x3E ou 0xD3[43]
- * - scooterData.voltage → provient de 0x3E[6-7] BE/1000
- * - scooterData.odometer → provient de 0x03[2-3] LE/100 ou 0x30[35-36] LE/10
- * - scooterData.temperature → provient de 0x3E[49] ou 0xD3[17,29]
- * - scooterData.speed → provient de 0x32[5]
- */
+
 @Composable
 fun RideScreen(
     scooterData: ScooterData,
@@ -178,10 +167,10 @@ fun RideScreen(
                     onUnitClick = {
                         scope.launch {
                             if (speedUnit == SpeedUnit.KMH) {
-                                bluetoothManager.sendCommand(ProtocolConstants.CMD_UNIT_MPH)
+                                bluetoothManager.sendCommand(ProtocolSimple.CMD_UNIT_MPH)
                                 speedUnit = SpeedUnit.MPH
                             } else {
-                                bluetoothManager.sendCommand(ProtocolConstants.CMD_UNIT_KMH)
+                                bluetoothManager.sendCommand(ProtocolSimple.CMD_UNIT_KMH)
                                 speedUnit = SpeedUnit.KMH
                             }
                         }
@@ -199,13 +188,13 @@ fun RideScreen(
                         isLocked = isLocked,
                         onLock = {
                             scope.launch {
-                                bluetoothManager.sendCommand(ProtocolConstants.CMD_LOCK)
+                                bluetoothManager.sendCommand(ProtocolSimple.CMD_LOCK)
                                 isLocked = true
                             }
                         },
                         onUnlock = {
                             scope.launch {
-                                bluetoothManager.sendCommand(ProtocolConstants.CMD_UNLOCK)
+                                bluetoothManager.sendCommand(ProtocolSimple.CMD_UNLOCK)
                                 isLocked = false
                             }
                         }
@@ -218,10 +207,10 @@ fun RideScreen(
                         onHeadlightsToggle = {
                             scope.launch {
                                 if (headlightsOn) {
-                                    bluetoothManager.sendCommand(ProtocolConstants.CMD_LIGHTS_OFF)
+                                    bluetoothManager.sendCommand(ProtocolSimple.CMD_LIGHTS_OFF)
                                     headlightsOn = false
                                 } else {
-                                    bluetoothManager.sendCommand(ProtocolConstants.CMD_LIGHTS_ON)
+                                    bluetoothManager.sendCommand(ProtocolSimple.CMD_LIGHTS_ON)
                                     headlightsOn = true
                                 }
                             }
@@ -229,23 +218,23 @@ fun RideScreen(
                         onNeonToggle = {
                             scope.launch {
                                 if (neonOn) {
-                                    bluetoothManager.sendCommand(ProtocolConstants.CMD_NEON_OFF)
+                                    bluetoothManager.sendCommand(ProtocolSimple.CMD_NEON_OFF)
                                     neonOn = false
                                 } else {
-                                    bluetoothManager.sendCommand(ProtocolConstants.CMD_NEON_ON)
+                                    bluetoothManager.sendCommand(ProtocolSimple.CMD_NEON_ON)
                                     neonOn = true
                                 }
                             }
                         },
                         onHornPress = {
                             scope.launch {
-                                bluetoothManager.sendCommand(ProtocolConstants.CMD_HORN_TRY_1)
+                                bluetoothManager.sendCommand(ProtocolSimple.CMD_HORN_TRY_1)
                                 Log.i("HORN", "🔊 Klaxon activé")
                             }
                         },
                         onHornRelease = {
                             scope.launch {
-                                bluetoothManager.sendCommand(ProtocolConstants.CMD_HORN_TRY_1)
+                                bluetoothManager.sendCommand(ProtocolSimple.CMD_HORN_TRY_1)
                                 Log.i("HORN", "🔊 Klaxon désactivé")
                             }
                         }
@@ -345,25 +334,25 @@ fun RideScreen(
                     onPedestrianClick = {
                         localCurrentMode = RideMode.PEDESTRIAN
                         scope.launch {
-                            bluetoothManager.sendCommand(ProtocolConstants.CMD_MODE_PEDESTRIAN)
+                            bluetoothManager.sendCommand(ProtocolSimple.CMD_MODE_PEDESTRIAN)
                         }
                     },
                     onEcoClick = {
                         localCurrentMode = RideMode.ECO
                         scope.launch {
-                            bluetoothManager.sendCommand(ProtocolConstants.CMD_MODE_ECO)
+                            bluetoothManager.sendCommand(ProtocolSimple.CMD_MODE_ECO)
                         }
                     },
                     onRaceClick = {
                         localCurrentMode = RideMode.RACE
                         scope.launch {
-                            bluetoothManager.sendCommand(ProtocolConstants.CMD_MODE_RACE)
+                            bluetoothManager.sendCommand(ProtocolSimple.CMD_MODE_RACE)
                         }
                     },
                     onSportClick = {
                         localCurrentMode = RideMode.SPORT
                         scope.launch {
-                            bluetoothManager.sendCommand(ProtocolConstants.CMD_MODE_SPORT)
+                            bluetoothManager.sendCommand(ProtocolSimple.CMD_MODE_SPORT)
                         }
                     }
                 )

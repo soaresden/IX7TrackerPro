@@ -4,7 +4,7 @@ package com.ix7.tracker.core
  * Constantes du protocole M0Robot - CORRIGÉ
  * Basé sur l'analyse approfondie des logs et du manuel
  */
-object ProtocolConstants {
+object ProtocolSimple {
 
     // ===== HEADERS DE TRAME =====
     const val FRAME_HEADER_1 = 0x55.toByte()  // Premier byte: 0x55

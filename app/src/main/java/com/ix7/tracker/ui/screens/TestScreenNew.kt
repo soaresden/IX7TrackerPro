@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ix7.tracker.bluetooth.BluetoothRepository
 import kotlinx.coroutines.launch
+import com.ix7.tracker.protocol.ProtocolSimple
 
 data class FrameMonitor(
     val type: String,
@@ -301,12 +302,13 @@ fun VariableRow(
 
 // ✅ Fonctions d'extraction des valeurs (mises à jour)
 fun findBattery(frames: MutableMap<String, FrameMonitor>): String {
-    // Chercher dans 0x20, 0x3E, 0xD3
-    listOf("0x20", "0x3E", "0xD3").forEach { offset ->
-        val frame = frames[offset]
-        val battery = frame?.decoded?.get("battery")?.value
-        if (battery != null) return battery
-    }
+    // Chercher dans les types de trames connus
+    val trameBatterie = frames["0x${ProtocolSimple.TRAME_BATTERIE.toInt().and(0xFF).toString(16)}"]
+    trameBatterie?.decoded?.get("battery")?.value?.let { return it }
+
+    val trameSysteme = frames["0x${ProtocolSimple.TRAME_SYSTEME.toInt().and(0xFF).toString(16)}"]
+    trameSysteme?.decoded?.get("battery")?.value?.let { return it }
+
     return "❓ Non trouvé"
 }
 
