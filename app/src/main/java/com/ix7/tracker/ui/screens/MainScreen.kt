@@ -11,6 +11,9 @@ import androidx.compose.ui.unit.sp
 import com.ix7.tracker.bluetooth.BluetoothRepository
 import com.ix7.tracker.core.ConnectionState
 import com.ix7.tracker.utils.LogManager
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.LaunchedEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,6 +27,13 @@ fun MainScreen(
     val discoveredDevices by bluetoothManager.discoveredDevices.collectAsState()
     val scooterData by bluetoothManager.scooterData.collectAsState()
     val isScanning by bluetoothManager.isScanning.collectAsState()
+    val framesState = remember { mutableStateMapOf<String, FrameMonitor>() }
+
+    LaunchedEffect(Unit) {  // ✅ Démarre immédiatement, pas besoin d'attendre CONNECTED
+        bluetoothManager.rawFrameFlow.collect { frame ->
+            updateFrameMonitor(framesState, frame)
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Barre de navigation avec 6 onglets
@@ -149,12 +159,13 @@ fun MainScreen(
 
                 3 -> TripHistoryScreen()
 
-                4 -> TestScreenOptimized(
+                4 -> TestScreenNew(
                     bluetoothManager = bluetoothManager,
-                    isConnected = connectionState == ConnectionState.CONNECTED
+                    isConnected = connectionState == ConnectionState.CONNECTED,
+                    framesState = framesState  // ✅ Passer le framesState au lieu du callback
                 )
 
-                5 -> RegulatorTestScreen(
+                5 -> SettingsScreen(
                     bluetoothManager = bluetoothManager,
                     isConnected = connectionState == ConnectionState.CONNECTED
                 )

@@ -7,8 +7,11 @@ import android.util.Log
 import com.ix7.tracker.core.BluetoothDeviceInfo
 import com.ix7.tracker.core.ConnectionState
 import com.ix7.tracker.core.ScooterData
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
@@ -26,6 +29,10 @@ class BluetoothManagerImpl(private val context: Context) : BluetoothRepository {
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     private val _scooterData = MutableStateFlow(ScooterData())
     private val _isScanning = MutableStateFlow(false)
+
+    // ✅ AJOUT - Flow pour les trames brutes
+    private val _rawFrameFlow = MutableSharedFlow<ByteArray>(replay = 0, extraBufferCapacity = 64)
+    override val rawFrameFlow: Flow<ByteArray> = _rawFrameFlow.asSharedFlow()
 
     override val discoveredDevices: StateFlow<List<BluetoothDeviceInfo>> = _discoveredDevices.asStateFlow()
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
@@ -49,6 +56,12 @@ class BluetoothManagerImpl(private val context: Context) : BluetoothRepository {
         },
         onStateChange = { state ->
             _connectionState.value = state
+        },
+        // ✅ AJOUT - Callback pour les données brutes
+        onRawDataReceived = { rawData ->
+            android.util.Log.d("BT_MANAGER", "🔥 rawData reçu dans callback: ${rawData.size} bytes")
+            val emitted = _rawFrameFlow.tryEmit(rawData)
+            android.util.Log.d("BT_MANAGER", "✅ tryEmit résultat: $emitted")
         }
     )
 

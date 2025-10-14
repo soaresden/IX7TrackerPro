@@ -2,6 +2,7 @@ package com.ix7.tracker.bluetooth
 
 import android.bluetooth.BluetoothDevice
 import com.ix7.tracker.core.*
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -16,6 +17,9 @@ interface BluetoothRepository {
     val connectionState: StateFlow<ConnectionState>
     val scooterData: StateFlow<ScooterData>
     val isScanning: StateFlow<Boolean>
+
+    // Flow des trames brutes reçues
+    val rawFrameFlow: Flow<ByteArray>  // ✅ AJOUTER CETTE LIGNE
 
     // Scan BLE
     suspend fun startScan(): Result<Unit>

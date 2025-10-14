@@ -20,6 +20,7 @@ data class ScooterData(
     val neonOn: Boolean = false,
     val currentMode: RideMode = RideMode.ECO,
     val isLocked: Boolean = false,
+    val lightsOn: Boolean = false,      // ← AJOUTER CETTE LIGNE
     val leftBlinker: Boolean = false,
     val rightBlinker: Boolean = false,
     val speedLimitMode: SpeedLimitMode = SpeedLimitMode.LIMITED,  // Au lieu de isUnlocked

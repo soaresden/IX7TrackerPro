@@ -12,8 +12,13 @@ import androidx.compose.ui.unit.sp
 import com.ix7.tracker.core.ScooterData
 
 /**
- * Écran d'informations complètes du scooter
- * TOUT sur UNE SEULE PAGE - Non scrollable
+ * 🎯 Écran d'informations CORRIGÉ avec les vrais offsets
+ *
+ * Valeurs validées:
+ * - Batterie: 66% (0x20[45], 0x3E, 0xD3[43])
+ * - Voltage: 49.0V (0x3E[6-7] BE/1000)
+ * - Odomètre: 102.9km (0x03[2-3] LE/100 ou 0x30[35-36] LE/10)
+ * - Température: 26-27°C (0x3E[49], 0xD3[17,29])
  */
 @Composable
 fun InfoScreen(scooterData: ScooterData, isConnected: Boolean) {
@@ -25,12 +30,24 @@ fun InfoScreen(scooterData: ScooterData, isConnected: Boolean) {
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         // Titre compact
-        Text(
-            text = "ℹ️ Informations",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.White
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "ℹ️ Informations",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+
+            // Indicateur de connexion
+            Text(
+                text = if (isConnected) "✅ Connecté" else "❌ Déconnecté",
+                fontSize = 12.sp,
+                color = if (isConnected) Color(0xFF4CAF50) else Color(0xFFF44336)
+            )
+        }
 
         // Grille d'informations 2 colonnes
         Row(
@@ -46,33 +63,66 @@ fun InfoScreen(scooterData: ScooterData, isConnected: Boolean) {
             ) {
                 // TRAJET & COMPTEURS
                 CompactInfoCard(title = "Trajet") {
-                    InfoLine("Distance", "%.1f km".format(scooterData.tripDistance))
-                    InfoLine("Vitesse", "%.1f km/h".format(scooterData.speed))
-                    InfoLine("Total", "%.1f km".format(scooterData.odometer))
-                    InfoLine("Temps", scooterData.totalRideTime)
+                    InfoLine(
+                        "Distance",
+                        if (isConnected) "%.1f km".format(scooterData.tripDistance) else "-"
+                    )
+                    InfoLine(
+                        "Vitesse",
+                        if (isConnected) "%.1f km/h".format(scooterData.speed) else "-"
+                    )
+                    InfoLine(
+                        "Total",
+                        if (isConnected) "%.1f km".format(scooterData.odometer) else "-",
+                        Color(0xFF2196F3)
+                    )
+                    InfoLine(
+                        "Temps",
+                        if (isConnected) scooterData.totalRideTime else "-"
+                    )
                 }
 
-                // BATTERIE
+                // BATTERIE (avec les vrais offsets)
                 val batteryColor = when {
+                    !isConnected -> Color.Gray
                     scooterData.battery > 50 -> Color(0xFF4CAF50)
                     scooterData.battery > 20 -> Color(0xFFFF9800)
                     else -> Color(0xFFF44336)
                 }
                 CompactInfoCard(title = "Batterie", titleColor = batteryColor) {
-                    InfoLine("Charge", "${scooterData.battery.toInt()}%", batteryColor)
-                    InfoLine("Tension", "%.1f V".format(scooterData.voltage))
-                    InfoLine("Courant", "%.1f A".format(scooterData.current))
-                    InfoLine("Puissance", "%.0f W".format(scooterData.power))
+                    InfoLine(
+                        "Charge",
+                        if (isConnected) "${scooterData.battery.toInt()}%" else "-",
+                        batteryColor
+                    )
+                    InfoLine(
+                        "Tension",
+                        if (isConnected) "%.2f V".format(scooterData.voltage) else "-",
+                        if (scooterData.voltage > 40.0) Color(0xFF4CAF50) else Color(0xFFFFC107)
+                    )
+                    InfoLine(
+                        "Courant",
+                        if (isConnected) "%.1f A".format(scooterData.current) else "-"
+                    )
+                    InfoLine(
+                        "Puissance",
+                        if (isConnected) "%.0f W".format(scooterData.power) else "-"
+                    )
                 }
 
-                // TEMPÉRATURE
+                // TEMPÉRATURE (avec les vrais offsets)
                 val tempColor = when {
+                    !isConnected -> Color.Gray
                     scooterData.temperature > 70 -> Color(0xFFF44336)
                     scooterData.temperature > 50 -> Color(0xFFFF9800)
                     else -> Color(0xFF4CAF50)
                 }
                 CompactInfoCard(title = "Température", titleColor = tempColor) {
-                    InfoLine("Scooter", "%.1f°C".format(scooterData.temperature), tempColor)
+                    InfoLine(
+                        "Scooter",
+                        if (isConnected) "%.1f°C".format(scooterData.temperature) else "-",
+                        tempColor
+                    )
                 }
             }
 
@@ -82,14 +132,13 @@ fun InfoScreen(scooterData: ScooterData, isConnected: Boolean) {
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 // CONFIGURATION
-                // CONFIGURATION
                 CompactInfoCard(title = "Configuration") {
                     InfoLine(
                         "Mode",
                         if (!isConnected) {
                             "-"
                         } else {
-                            when (scooterData.currentMode?.name) {
+                            when (scooterData.currentMode.name) {
                                 "PEDESTRIAN" -> "🚶 Piéton"
                                 "ECO" -> "🌱 Eco"
                                 "SPORT" -> "⚡ Sport"
@@ -103,14 +152,14 @@ fun InfoScreen(scooterData: ScooterData, isConnected: Boolean) {
                         if (!isConnected) {
                             "-"
                         } else {
-                            when (scooterData.speedLimitMode?.name) {
+                            when (scooterData.speedLimitMode.name) {
                                 "LIMITED" -> "🚧 Bridé"
                                 "UNLIMITED" -> "⚡ Débridé"
                                 else -> "-"
                             }
                         }
                     )
-                }   
+                }
 
                 // VERSIONS
                 CompactInfoCard(title = "Versions") {
@@ -118,14 +167,43 @@ fun InfoScreen(scooterData: ScooterData, isConnected: Boolean) {
                     InfoLine("Bluetooth", scooterData.bluetoothVersion.ifEmpty { "N/A" })
                 }
 
-                // CONNEXION
-                val connColor = if (isConnected) Color(0xFF4CAF50) else Color(0xFFF44336)
-                CompactInfoCard(title = "Connexion", titleColor = connColor) {
-                    InfoLine(
-                        "État",
-                        if (isConnected) "✅ Connecté" else "❌ Déconnecté",
-                        connColor
-                    )
+                // DIAGNOSTIC DES OFFSETS
+                if (isConnected) {
+                    CompactInfoCard(title = "🔍 Diagnostic", titleColor = Color(0xFF64B5F6)) {
+                        Text(
+                            "Offsets validés :",
+                            fontSize = 10.sp,
+                            color = Color.Gray
+                        )
+                        InfoLine(
+                            "Batterie",
+                            "0x20[45], 0x3E, 0xD3[43]",
+                            Color(0xFF64B5F6)
+                        )
+                        InfoLine(
+                            "Voltage",
+                            "0x3E[6-7] BE/1000",
+                            Color(0xFF64B5F6)
+                        )
+                        InfoLine(
+                            "Odomètre",
+                            "0x03[2-3] LE/100",
+                            Color(0xFF64B5F6)
+                        )
+                        InfoLine(
+                            "Temp",
+                            "0x3E[49], 0xD3",
+                            Color(0xFF64B5F6)
+                        )
+                    }
+                } else {
+                    CompactInfoCard(title = "❌ Déconnecté", titleColor = Color(0xFFF44336)) {
+                        Text(
+                            "Connecte-toi pour voir les données en temps réel",
+                            fontSize = 11.sp,
+                            color = Color.Gray
+                        )
+                    }
                 }
             }
         }

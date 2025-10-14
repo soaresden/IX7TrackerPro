@@ -23,6 +23,18 @@ import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import android.location.Location
 
+/**
+ * 🎯 ÉCRAN RIDE CORRIGÉ
+ *
+ * Ce fichier utilise les données provenant de ScooterData qui sont maintenant
+ * décodées avec les VRAIS offsets validés par l'analyse du log:
+ *
+ * - scooterData.battery → provient de 0x20[45], 0x3E ou 0xD3[43]
+ * - scooterData.voltage → provient de 0x3E[6-7] BE/1000
+ * - scooterData.odometer → provient de 0x03[2-3] LE/100 ou 0x30[35-36] LE/10
+ * - scooterData.temperature → provient de 0x3E[49] ou 0xD3[17,29]
+ * - scooterData.speed → provient de 0x32[5]
+ */
 @Composable
 fun RideScreen(
     scooterData: ScooterData,
@@ -75,9 +87,9 @@ fun RideScreen(
         RideMode.RACE -> speedLimits.race
     }
 
-
-
     val displayMaxSpeed = if (speedUnit == SpeedUnit.MPH) (maxSpeed * 0.621371).toInt() else maxSpeed
+
+    // 🎯 VITESSE CORRIGÉE - provient de 0x32[5]
     val currentSpeed = if (speedUnit == SpeedUnit.MPH) {
         scooterData.speed * 0.621371f
     } else {
@@ -158,7 +170,7 @@ fun RideScreen(
                 modifier = Modifier.fillMaxWidth().height(100.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Compteur de vitesse
+                // 🎯 Compteur de vitesse - UTILISE LA VRAIE VITESSE de 0x32[5]
                 ModCompteurView(
                     speed = if (isConnected) currentSpeed else 0f,
                     maxSpeed = displayMaxSpeed.toFloat(),
@@ -369,6 +381,9 @@ fun RideScreen(
         ModClignoBtn()
 
         // 5️⃣ GRAPHIQUE + CONTRÔLES
+        // 🎯 UTILISE LES VRAIES VALEURS:
+        // - currentSpeed → de 0x32[5]
+        // - scooterData.battery → de 0x20[45], 0x3E ou 0xD3[43]
         ModGraphView(
             isRiding = isRiding,
             isPaused = isPaused,
@@ -385,6 +400,7 @@ fun RideScreen(
         )
 
         // 6️⃣ INFOS
+        // 🎯 AFFICHE LES VRAIES VALEURS de scooterData (décodées avec les bons offsets)
         ModInfoRideView(scooterData = scooterData)
     }
 }

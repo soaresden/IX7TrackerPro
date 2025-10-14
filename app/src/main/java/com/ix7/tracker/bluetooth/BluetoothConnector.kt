@@ -22,7 +22,8 @@ import com.ix7.tracker.core.WheelMode
 class BluetoothConnector(
     private val context: Context,
     private val onDataReceived: (ScooterData) -> Unit,
-    private val onStateChange: (ConnectionState) -> Unit
+    private val onStateChange: (ConnectionState) -> Unit,
+    private val onRawDataReceived: ((ByteArray) -> Unit)? = null  // ✅ CETTE LIGNE DOIT ÊTRE LÀ
 ) {
 
     companion object {
@@ -86,6 +87,15 @@ class BluetoothConnector(
             characteristic: BluetoothGattCharacteristic?
         ) {
             characteristic?.value?.let { data ->
+                android.util.Log.d("BT_CONNECTOR", "📡 onCharacteristicChanged: ${data.size} bytes")
+
+                // ✅ AJOUTER CETTE LIGNE POUR VOIR LE CONTENU
+                android.util.Log.d("BT_CONNECTOR", "📦 Contenu: ${data.joinToString(" ") { "%02X".format(it) }}")
+
+                // ✅ AJOUT - Émettre les données brutes AVANT le parsing
+                onRawDataReceived?.invoke(data)
+                android.util.Log.d("BT_CONNECTOR", "✅ onRawDataReceived invoqué")
+
                 // 🔥 NOUVEAU : Utilise ScooterDataParser au lieu de BluetoothDataHandler
                 val scooterData = ScooterDataParser.parseFrame(data, currentScooterData)
 
