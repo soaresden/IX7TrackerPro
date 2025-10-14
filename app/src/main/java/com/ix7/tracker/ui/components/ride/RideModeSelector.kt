@@ -2,6 +2,7 @@
 package com.ix7.tracker.ui.components.ride
 
 import androidx.compose.foundation.layout.*
+import com.ix7.tracker.core.RideMode
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -10,7 +11,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ix7.tracker.core.RideMode
 
 @Composable
 fun RideModeSelector(

@@ -1,6 +1,9 @@
 package com.ix7.tracker.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import com.ix7.tracker.core.SpeedLimitMode
+import com.ix7.tracker.core.WheelMode
+import com.ix7.tracker.core.RideMode
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -233,27 +236,27 @@ fun StatRow(label: String, value: String) {
 
 fun getModeIcon(settings: TripSettings): String {
     return when (settings.ridingMode) {
-        RidingMode.PEDESTRIAN -> "🚶"
-        RidingMode.ECO -> "🍃"
-        RidingMode.SPORT -> "⚡"
-        RidingMode.RACE -> "🏁"
+        RideMode.PEDESTRIAN -> "🚶"
+        RideMode.ECO -> "🍃"
+        RideMode.SPORT -> "⚡"
+        RideMode.RACE -> "🏁"
     }
 }
 
 fun getModeText(settings: TripSettings): String {
     val mode = when (settings.ridingMode) {
-        RidingMode.PEDESTRIAN -> "Piéton"
-        RidingMode.ECO -> "Eco"
-        RidingMode.SPORT -> "Sport"
-        RidingMode.RACE -> "Race"
+        RideMode.PEDESTRIAN -> "Piéton"
+        RideMode.ECO -> "Eco"
+        RideMode.SPORT -> "Sport"
+        RideMode.RACE -> "Race"
     }
     val drive = when (settings.driveMode) {
-        DriveMode.ONE_WHEEL -> "1R"
-        DriveMode.TWO_WHEELS -> "2R"
+        WheelMode.ONE_WHEEL -> "1R"
+        WheelMode.TWO_WHEELS -> "2R"
     }
     val lock = when (settings.speedLock) {
-        SpeedLock.LOCKED -> "🔒"
-        SpeedLock.UNLOCKED -> "🔓"
+        SpeedLimitMode.LIMITED -> "🔒"
+        SpeedLimitMode.UNLIMITED -> "🔓"
     }
     return "$mode $drive $lock"
 }

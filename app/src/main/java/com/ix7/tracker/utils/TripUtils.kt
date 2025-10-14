@@ -1,6 +1,9 @@
 package com.ix7.tracker.utils
 
 import com.ix7.tracker.data.*
+import com.ix7.tracker.core.SpeedLimitMode
+import com.ix7.tracker.core.WheelMode
+import com.ix7.tracker.core.RideMode
 import java.util.*
 
 object TripUtils {
@@ -117,82 +120,5 @@ object TripUtils {
                 aggregatedSpeedStats = aggregatedStats
             )
         }.sortedByDescending { it.tripCount }
-    }
-
-    fun generateDummyTrips(): List<Trip> {
-        return listOf(
-            Trip(
-                id = "1",
-                startDate = Date(System.currentTimeMillis() - 86400000 * 5),
-                startBattery = 100,
-                startOdometer = 1234.5f,
-                startLocation = TripLocation(48.8566, 2.3522, "Paris Centre"),
-                endDate = Date(System.currentTimeMillis() - 86400000 * 5 + 1860000),
-                endBattery = 68,
-                endOdometer = 1247.0f,
-                endLocation = TripLocation(48.8606, 2.3376, "Tour Eiffel"),
-                distance = 12.5f,
-                duration = 1860,
-                maxSpeed = 42f,
-                avgSpeed = 24f,
-                energyUsed = 245f,
-                speedStats = SpeedStats(180, 420, 374, 600, 366, 100, 20, 0),
-                settings = TripSettings(RidingMode.SPORT, DriveMode.TWO_WHEELS, SpeedLock.UNLOCKED)
-            ),
-            Trip(
-                id = "2",
-                startDate = Date(System.currentTimeMillis() - 86400000 * 4),
-                startBattery = 68,
-                startOdometer = 1247.0f,
-                startLocation = TripLocation(48.8606, 2.3376, "Tour Eiffel"),
-                endDate = Date(System.currentTimeMillis() - 86400000 * 4 + 1200000),
-                endBattery = 42,
-                endOdometer = 1255.3f,
-                endLocation = TripLocation(48.8738, 2.2950, "La Défense"),
-                distance = 8.3f,
-                duration = 1200,
-                maxSpeed = 38f,
-                avgSpeed = 25f,
-                energyUsed = 180f,
-                speedStats = SpeedStats(120, 300, 280, 400, 200, 20, 0, 0),
-                settings = TripSettings(RidingMode.ECO, DriveMode.TWO_WHEELS, SpeedLock.LOCKED)
-            ),
-            Trip(
-                id = "3",
-                startDate = Date(System.currentTimeMillis() - 86400000 * 3),
-                startBattery = 95,
-                startOdometer = 1255.3f,
-                startLocation = TripLocation(48.8738, 2.2950, "La Défense"),
-                endDate = Date(System.currentTimeMillis() - 86400000 * 3 + 1500000),
-                endBattery = 65,
-                endOdometer = 1267.8f,
-                endLocation = TripLocation(48.8584, 2.2945, "Arc de Triomphe"),
-                distance = 12.5f,
-                duration = 1500,
-                maxSpeed = 45f,
-                avgSpeed = 30f,
-                energyUsed = 250f,
-                speedStats = SpeedStats(150, 380, 400, 450, 300, 50, 20, 0),
-                settings = TripSettings(RidingMode.RACE, DriveMode.TWO_WHEELS, SpeedLock.UNLOCKED)
-            ),
-            Trip(
-                id = "4",
-                startDate = Date(System.currentTimeMillis() - 86400000 * 2),
-                startBattery = 65,
-                startOdometer = 1267.8f,
-                startLocation = TripLocation(48.8584, 2.2945, "Arc de Triomphe"),
-                endDate = Date(System.currentTimeMillis() - 86400000 * 2 + 900000),
-                endBattery = 50,
-                endOdometer = 1273.1f,
-                endLocation = TripLocation(48.8566, 2.3522, "Paris Centre"),
-                distance = 5.3f,
-                duration = 900,
-                maxSpeed = 25f,
-                avgSpeed = 21f,
-                energyUsed = 120f,
-                speedStats = SpeedStats(200, 350, 250, 100, 0, 0, 0, 0),
-                settings = TripSettings(RidingMode.PEDESTRIAN, DriveMode.ONE_WHEEL, SpeedLock.LOCKED)
-            )
-        )
     }
 }

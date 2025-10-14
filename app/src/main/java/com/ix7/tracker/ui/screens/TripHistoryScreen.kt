@@ -1,6 +1,9 @@
 package com.ix7.tracker.ui.screens
 
 import android.content.Context
+import com.ix7.tracker.core.SpeedLimitMode
+import com.ix7.tracker.core.WheelMode
+import com.ix7.tracker.core.RideMode
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.border
@@ -307,9 +310,9 @@ private fun exportToJson(context: Context, trips: List<Trip>) {
                 })
 
                 put("settings", JSONObject().apply {
-                    put("ridingMode", trip.settings.ridingMode.name)
+                    put("RideMode", trip.settings.ridingMode.name)
                     put("driveMode", trip.settings.driveMode.name)
-                    put("speedLock", trip.settings.speedLock.name)
+                    put("SpeedLimitMode", trip.settings.speedLock.name)
                 })
             }
             jsonArray.put(tripJson)

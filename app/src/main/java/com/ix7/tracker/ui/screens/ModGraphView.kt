@@ -1,6 +1,9 @@
 package com.ix7.tracker.ui.components
 
 import android.location.Location
+import com.ix7.tracker.core.SpeedLimitMode
+import com.ix7.tracker.core.WheelMode
+import com.ix7.tracker.core.RideMode
 import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
@@ -127,16 +130,16 @@ fun ModGraphView(
                                 location = location,
                                 settings = TripSettings(
                                     ridingMode = when(currentMode) {
-                                        com.ix7.tracker.core.RideMode.PEDESTRIAN -> RidingMode.PEDESTRIAN
-                                        com.ix7.tracker.core.RideMode.ECO -> RidingMode.ECO
-                                        com.ix7.tracker.core.RideMode.SPORT -> RidingMode.SPORT
-                                        com.ix7.tracker.core.RideMode.RACE -> RidingMode.RACE
+                                        com.ix7.tracker.core.RideMode.PEDESTRIAN -> RideMode.PEDESTRIAN
+                                        com.ix7.tracker.core.RideMode.ECO -> RideMode.ECO
+                                        com.ix7.tracker.core.RideMode.SPORT -> RideMode.SPORT
+                                        com.ix7.tracker.core.RideMode.RACE -> RideMode.RACE
                                     },
                                     driveMode = when(wheelMode) {
-                                        com.ix7.tracker.core.WheelMode.ONE_WHEEL -> DriveMode.ONE_WHEEL
-                                        com.ix7.tracker.core.WheelMode.TWO_WHEELS -> DriveMode.TWO_WHEELS
+                                        com.ix7.tracker.core.WheelMode.ONE_WHEEL -> WheelMode.ONE_WHEEL
+                                        com.ix7.tracker.core.WheelMode.TWO_WHEELS -> WheelMode.TWO_WHEELS
                                     },
-                                    speedLock = if (isUnlimited) SpeedLock.UNLOCKED else SpeedLock.LOCKED
+                                    speedLock = if (isUnlimited) SpeedLimitMode.UNLIMITED else SpeedLimitMode.LIMITED
                                 )
                             )
                             Log.i("ModGraphView", "🟢 Enregistrement démarré")

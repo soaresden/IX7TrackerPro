@@ -1,6 +1,7 @@
 package com.ix7.tracker.ui.screens
 
 import androidx.compose.foundation.background
+import com.ix7.tracker.core.RideMode
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,7 +17,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ix7.tracker.bluetooth.BluetoothRepository
 import com.ix7.tracker.core.ConnectionState
-import com.ix7.tracker.core.RideMode
 import com.ix7.tracker.core.ScooterData
 import kotlinx.coroutines.launch
 

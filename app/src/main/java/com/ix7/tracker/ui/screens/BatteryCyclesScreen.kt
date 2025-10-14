@@ -1,6 +1,9 @@
 package com.ix7.tracker.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import com.ix7.tracker.core.SpeedLimitMode
+import com.ix7.tracker.core.WheelMode
+import com.ix7.tracker.core.RideMode
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -270,24 +273,24 @@ private fun calculateCycleModeStats(cycle: BatteryCycle): CycleModeStats {
     val ridingModeStats = mutableMapOf<String, Float>()
 
     // Ajouter TOUS les modes, même à 0%
-    ridingModeStats["🚶 Piéton"] = (ridingModeCount[RidingMode.PEDESTRIAN] ?: 0) / totalTrips * 100
-    ridingModeStats["🍃 Eco"] = (ridingModeCount[RidingMode.ECO] ?: 0) / totalTrips * 100
-    ridingModeStats["⚡ Sport"] = (ridingModeCount[RidingMode.SPORT] ?: 0) / totalTrips * 100
-    ridingModeStats["🏁 Race"] = (ridingModeCount[RidingMode.RACE] ?: 0) / totalTrips * 100
+    ridingModeStats["🚶 Piéton"] = (ridingModeCount[RideMode.PEDESTRIAN] ?: 0) / totalTrips * 100
+    ridingModeStats["🍃 Eco"] = (ridingModeCount[RideMode.ECO] ?: 0) / totalTrips * 100
+    ridingModeStats["⚡ Sport"] = (ridingModeCount[RideMode.SPORT] ?: 0) / totalTrips * 100
+    ridingModeStats["🏁 Race"] = (ridingModeCount[RideMode.RACE] ?: 0) / totalTrips * 100
 
     // Stats roues - TOUS les modes
     val driveModeCount = cycle.trips.groupBy { it.settings.driveMode }.mapValues { it.value.size }
     val driveModeStats = mutableMapOf<String, Float>()
 
-    driveModeStats["1 roue"] = (driveModeCount[DriveMode.ONE_WHEEL] ?: 0) / totalTrips * 100
-    driveModeStats["2 roues"] = (driveModeCount[DriveMode.TWO_WHEELS] ?: 0) / totalTrips * 100
+    driveModeStats["1 roue"] = (driveModeCount[WheelMode.ONE_WHEEL] ?: 0) / totalTrips * 100
+    driveModeStats["2 roues"] = (driveModeCount[WheelMode.TWO_WHEELS] ?: 0) / totalTrips * 100
 
     // Stats bridage - TOUS les modes
     val speedLockCount = cycle.trips.groupBy { it.settings.speedLock }.mapValues { it.value.size }
     val speedLockStats = mutableMapOf<String, Float>()
 
-    speedLockStats["🔒 Bridé"] = (speedLockCount[SpeedLock.LOCKED] ?: 0) / totalTrips * 100
-    speedLockStats["🔓 Débridé"] = (speedLockCount[SpeedLock.UNLOCKED] ?: 0) / totalTrips * 100
+    speedLockStats["🔒 Bridé"] = (speedLockCount[SpeedLimitMode.LIMITED] ?: 0) / totalTrips * 100
+    speedLockStats["🔓 Débridé"] = (speedLockCount[SpeedLimitMode.UNLIMITED] ?: 0) / totalTrips * 100
 
     return CycleModeStats(ridingModeStats, driveModeStats, speedLockStats)
 }

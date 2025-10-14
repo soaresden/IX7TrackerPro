@@ -3,7 +3,6 @@ package com.ix7.tracker.protocol
 import android.util.Log
 import com.ix7.tracker.core.RideMode
 import com.ix7.tracker.core.ScooterData
-import com.ix7.tracker.core.SpeedLimitMode
 
 /**
  * 🔍 PARSER DE DEBUG ULTIME

@@ -1,6 +1,7 @@
 package com.ix7.tracker.ui.screens
 
 import androidx.compose.foundation.background
+import com.ix7.tracker.core.RideMode
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
@@ -13,9 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ix7.tracker.core.ScooterData
-import com.ix7.tracker.core.RideMode
 import com.ix7.tracker.core.WheelMode
-import com.ix7.tracker.core.SpeedUnit
 import com.ix7.tracker.core.SpeedLimits
 @Composable
 fun DashboardDisplay(

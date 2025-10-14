@@ -1,5 +1,8 @@
 package com.ix7.tracker.data
 
+import com.ix7.tracker.core.RideMode
+import com.ix7.tracker.core.WheelMode
+import com.ix7.tracker.core.SpeedLimitMode
 import java.util.*
 
 data class Scooter(
@@ -17,9 +20,9 @@ data class ScooterStatus(
     val temperature: Float = 0f,
     val voltage: Float = 0f,
     val current: Float = 0f,
-    val ridingMode: RidingMode = RidingMode.ECO,
-    val driveMode: DriveMode = DriveMode.TWO_WHEELS,
-    val speedLock: SpeedLock = SpeedLock.LOCKED,
+    val ridingMode: RideMode = RideMode.ECO,
+    val driveMode: WheelMode = WheelMode.TWO_WHEELS,
+    val speedLock: SpeedLimitMode = SpeedLimitMode.LIMITED,
     val timestamp: Long = System.currentTimeMillis()
 )
 

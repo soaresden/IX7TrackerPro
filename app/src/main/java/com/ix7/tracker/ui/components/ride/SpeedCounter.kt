@@ -2,6 +2,7 @@
 package com.ix7.tracker.ui.components.ride
 
 import androidx.compose.foundation.layout.*
+import com.ix7.tracker.core.SpeedUnit
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -10,7 +11,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ix7.tracker.core.SpeedUnit
 
 @Composable
 fun SpeedCounter(

@@ -1,6 +1,9 @@
 package com.ix7.tracker.data
 
 import android.content.Context
+import com.ix7.tracker.core.SpeedLimitMode
+import com.ix7.tracker.core.WheelMode
+import com.ix7.tracker.core.RideMode
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 
@@ -36,10 +39,10 @@ data class TripEntity(
     val range50_60: Long,
     val rangeAbove60: Long,
 
-    // Settings
-    val ridingMode: String,
-    val driveMode: String,
-    val speedLock: String
+    // Settings - NOMS DE VARIABLES CORRIGES
+    val ridingMode: String,      // ✅ C'est le NOM de la variable
+    val driveMode: String,        // ✅ C'est le NOM de la variable
+    val speedLock: String         // ✅ C'est le NOM de la variable
 )
 
 @Dao
@@ -85,7 +88,7 @@ abstract class TripDatabase : RoomDatabase() {
     }
 }
 
-// Convertisseurs
+// Convertisseurs - CORRIGES
 fun TripEntity.toTrip(): Trip {
     return Trip(
         id = id,
@@ -104,9 +107,9 @@ fun TripEntity.toTrip(): Trip {
         energyUsed = energyUsed,
         speedStats = SpeedStats(range0, range0_10, range10_20, range20_30, range30_40, range40_50, range50_60, rangeAbove60),
         settings = TripSettings(
-            ridingMode = RidingMode.valueOf(ridingMode),
-            driveMode = DriveMode.valueOf(driveMode),
-            speedLock = SpeedLock.valueOf(speedLock)
+            ridingMode = RideMode.valueOf(ridingMode),     // ✅ CORRIGE
+            driveMode = WheelMode.valueOf(driveMode),      // ✅ CORRIGE
+            speedLock = SpeedLimitMode.valueOf(speedLock)  // ✅ CORRIGE
         )
     )
 }
@@ -139,8 +142,8 @@ fun Trip.toEntity(): TripEntity {
         range40_50 = speedStats.range40_50,
         range50_60 = speedStats.range50_60,
         rangeAbove60 = speedStats.rangeAbove60,
-        ridingMode = settings.ridingMode.name,
-        driveMode = settings.driveMode.name,
-        speedLock = settings.speedLock.name
+        ridingMode = settings.ridingMode.name,    // ✅ CORRIGE
+        driveMode = settings.driveMode.name,      // ✅ CORRIGE
+        speedLock = settings.speedLock.name       // ✅ CORRIGE
     )
 }

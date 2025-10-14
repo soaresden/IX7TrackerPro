@@ -1,13 +1,13 @@
 package com.ix7.tracker.bluetooth
 
 import android.bluetooth.*
+import com.ix7.tracker.core.SpeedLimitMode
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.ix7.tracker.core.ConnectionState
 import com.ix7.tracker.core.ScooterData
-import com.ix7.tracker.core.SpeedLimitMode
 import com.ix7.tracker.protocol.DebugParser // 🔥 NOUVEAU IMPORT
 import kotlinx.coroutines.*
 import java.util.*
