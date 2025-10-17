@@ -7,13 +7,6 @@ import com.ix7.tracker.core.ScooterData
 /**
  * Parser pour décoder les trames de données de la trottinette M0Robot
  * VERSION CORRIGÉE - Offsets validés par analyse des logs réels
- *
- *
- * Types de trames:
- * - 0x02: Données principales (batterie, température, puissance, tension)
- * - 0x04: Odomètre total
- * - 0x32: Vitesse actuelle
- * - 0x37: Temps réel complet (PRIORITAIRE - contient toutes les données!)
  */
 object DebugParser {
     private const val TAG = "ScooterParser"
