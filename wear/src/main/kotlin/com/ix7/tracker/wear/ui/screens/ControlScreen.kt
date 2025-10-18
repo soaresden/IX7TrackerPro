@@ -14,17 +14,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ix7.tracker.wear.bluetooth.WearBluetoothManager
+import kotlinx.coroutines.launch
 
 @Composable
 fun ControlScreen(
+    bluetoothManager: WearBluetoothManager,
     scooterName: String,
+    scooterAddress: String,
     onBackClick: () -> Unit
 ) {
+    val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
 
+    val connectionState by bluetoothManager.connectionState.collectAsState()
+    val scooterData by bluetoothManager.scooterData.collectAsState()
+
     var scooterLocked by remember { mutableStateOf(false) }
-    var lockLocked by remember { mutableStateOf(false) }
-    var actionMessage by remember { mutableStateOf("") }
+    var lastAction by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -40,110 +47,71 @@ fun ControlScreen(
             color = Color.White,
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 16.dp)
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        Text(
+            text = scooterAddress,
+            color = Color.Gray,
+            fontSize = 9.sp,
+            modifier = Modifier.padding(bottom = 4.dp)
         )
 
         // Status
         Text(
-            text = "Connecté ✓",
-            color = Color.Green,
+            text = if (connectionState.name == "CONNECTED") "Connecté ✓" else "Déconnexion...",
+            color = if (connectionState.name == "CONNECTED") Color.Green else Color.Red,
             fontSize = 11.sp,
-            modifier = Modifier.padding(bottom = 12.dp)
+            modifier = Modifier.padding(bottom = 16.dp)
         )
 
-        // Bouton Lock Trottinette
+        // Données scooter
+        scooterData?.let { data ->
+            Text(
+                text = "🔋 ${data.battery}% | 🌡️ ${data.temperature}°C | ⚡ ${data.speed} km/h",
+                color = Color.LightGray,
+                fontSize = 10.sp,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Bouton Lock/Unlock
         Button(
             onClick = {
                 scooterLocked = !scooterLocked
-                actionMessage = if (scooterLocked) "🔒 Trottinette verrouillée" else "🔓 Trottinette déverrouillée"
+                if (scooterLocked) {
+                    bluetoothManager.lockScooter()
+                    lastAction = "🔒 Trottinette verrouillée"
+                } else {
+                    bluetoothManager.unlockScooter()
+                    lastAction = "🔓 Trottinette déverrouillée"
+                }
             },
             colors = ButtonDefaults.buttonColors(
                 backgroundColor = if (scooterLocked) Color(0xFF2d5a2d) else Color(0xFF5a2d2d)
             ),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(45.dp)
+                .height(40.dp)
         ) {
             Text(
-                text = if (scooterLocked) "🔒 Déverrouiller" else "🔓 Verrouiller",
+                text = if (scooterLocked) "🔒 Verrouillée" else "🔓 Déverrouiller",
                 fontSize = 11.sp,
                 color = Color.White
             )
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Bouton Unlock Trottinette
-        Button(
-            onClick = {
-                scooterLocked = !scooterLocked
-                actionMessage = if (scooterLocked) "🔒 Trottinette verrouillée" else "🔓 Trottinette déverrouillée"
-            },
-            colors = ButtonDefaults.buttonColors(
-                backgroundColor = if (!scooterLocked) Color(0xFF2d5a2d) else Color(0xFF5a2d2d)
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(45.dp)
-        ) {
+        // Dernier action
+        if (lastAction.isNotEmpty()) {
             Text(
-                text = if (!scooterLocked) "✓ Déverrouillée" else "Verrouiller",
-                fontSize = 11.sp,
-                color = Color.White
-            )
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Bouton Lock Cadenas
-        Button(
-            onClick = {
-                lockLocked = !lockLocked
-                actionMessage = if (lockLocked) "🔐 Cadenas verrouillé" else "🔓 Cadenas déverrouillé"
-            },
-            colors = ButtonDefaults.buttonColors(
-                backgroundColor = if (lockLocked) Color(0xFF2d5a2d) else Color(0xFF5a2d2d)
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(45.dp)
-        ) {
-            Text(
-                text = if (lockLocked) "🔐 Déverrouiller" else "🔓 Verrouiller",
-                fontSize = 11.sp,
-                color = Color.White
-            )
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Bouton Unlock Cadenas
-        Button(
-            onClick = {
-                lockLocked = !lockLocked
-                actionMessage = if (lockLocked) "🔐 Cadenas verrouillé" else "🔓 Cadenas déverrouillé"
-            },
-            colors = ButtonDefaults.buttonColors(
-                backgroundColor = if (!lockLocked) Color(0xFF2d5a2d) else Color(0xFF5a2d2d)
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(45.dp)
-        ) {
-            Text(
-                text = if (!lockLocked) "✓ Déverrouillé" else "Verrouiller",
-                fontSize = 11.sp,
-                color = Color.White
-            )
-        }
-
-        // Message d'action
-        if (actionMessage.isNotEmpty()) {
-            Text(
-                text = actionMessage,
+                text = lastAction,
                 color = Color.Yellow,
                 fontSize = 10.sp,
-                modifier = Modifier.padding(top = 16.dp)
+                modifier = Modifier.padding(8.dp)
             )
         }
 
@@ -151,7 +119,12 @@ fun ControlScreen(
 
         // Bouton Retour
         Button(
-            onClick = onBackClick,
+            onClick = {
+                scope.launch {
+                    bluetoothManager.disconnect()
+                    onBackClick()
+                }
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(40.dp)

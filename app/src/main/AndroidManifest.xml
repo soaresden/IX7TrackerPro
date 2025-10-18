@@ -38,18 +38,15 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.IX7Tracker">
+        android:theme="@style/Theme.IX7Tracker"
         tools:targetApi="31">
-
-
-
 
         <!-- Activité principale -->
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.IX7Tracker">
+            android:theme="@style/Theme.IX7Tracker"
             android:screenOrientation="portrait"
             android:launchMode="singleTop">
             <intent-filter>
@@ -57,26 +54,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-
-<!--        &lt;!&ndash; NOUVELLE ACTIVITÉ DE SPLASH - Point d'entrée principal &ndash;&gt;-->
-<!--        <activity-->
-<!--            android:name=".ui.SplashActivity"-->
-<!--            android:exported="true"-->
-<!--            android:theme="@style/Theme.IX7Tracker">-->
-<!--            <intent-filter>-->
-<!--                <action android:name="android.intent.action.MAIN" />-->
-<!--                <category android:name="android.intent.category.LAUNCHER" />-->
-<!--            </intent-filter>-->
-<!--        </activity>-->
-
-        <!-- Déclaration du service Bluetooth (si nécessaire) -->
-        <!--
-        <service
-            android:name=".BluetoothService"
-            android:enabled="true"
-            android:exported="false" />
-        -->
 
     </application>
 

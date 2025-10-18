@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "IX7 Tracker Pro"
 include(":app")
+include(":wear")  // ← Ajouter cette ligne
