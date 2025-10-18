@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<incidents format="6" by="lint 8.13.0" type="partial_results">
+    <map id="UnsafeIntentLaunch">
+            <map id="unprotected">
+                <entry
+                    name="com.ix7.tracker.wear.MainActivity"
+                    boolean="true"/>
+            </map>
+    </map>
+    <map id="UnusedResources">
+        <location id="R.color.black"
+            file="${:wear*debug*MAIN*sourceProvider*0*resDir*0}/values/colors.xml"
+            line="3"
+            column="12"
+            startOffset="64"
+            endLine="3"
+            endColumn="24"
+            endOffset="76"/>
+        <location id="R.color.green"
+            file="${:wear*debug*MAIN*sourceProvider*0*resDir*0}/values/colors.xml"
+            line="5"
+            column="12"
+            startOffset="150"
+            endLine="5"
+            endColumn="24"
+            endOffset="162"/>
+        <location id="R.color.white"
+            file="${:wear*debug*MAIN*sourceProvider*0*resDir*0}/values/colors.xml"
+            line="4"
+            column="12"
+            startOffset="107"
+            endLine="4"
+            endColumn="24"
+            endOffset="119"/>
+        <location id="R.drawable.ic_launcher_foreground"
+            file="${:wear*debug*MAIN*sourceProvider*0*resDir*0}/drawable/ic_launcher_foreground.xml"
+            line="2"
+            column="1"
+            startOffset="40"
+            endLine="10"
+            endColumn="10"
+            endOffset="351"/>
+        <location id="R.mipmap.ic_launcher_round"
+            file="${:wear*debug*MAIN*sourceProvider*0*resDir*0}/mipmap-hdpi/ic_launcher_round.webp"/>
+        <entry
+            name="model"
+            string="color[ic_launcher_background(U),black(D),white(D),green(D)],drawable[ic_launcher_foreground(D)],mipmap[ic_launcher(U),ic_launcher_foreground(U),ic_launcher_round(D)],string[app_name(U)],xml[data_extraction_rules(U),backup_rules(U)];5^0^6,7^0^6;;;"/>
+    </map>
+
+</incidents>

@@ -1,41 +1,65 @@
 package com.ix7.tracker.wear
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-import com.ix7.tracker.wear.ui.ScreenManagement
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import com.ix7.tracker.wear.bluetooth.WearScooterManager
+import com.ix7.tracker.wear.bluetooth.LockManager
+import com.ix7.tracker.wear.ui.screens.ScannerScreen
+import com.ix7.tracker.wear.ui.screens.ControlScreen
+import android.util.Log
 
 class MainActivity : ComponentActivity() {
-    private val PERMISSION_REQUEST_CODE = 100
+
+    private lateinit var scooterManager: WearScooterManager
+    private lateinit var lockManager: LockManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Demander les permissions Bluetooth
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.BLUETOOTH_SCAN
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(
-                        Manifest.permission.BLUETOOTH_SCAN,
-                        Manifest.permission.BLUETOOTH_CONNECT
-                    ),
-                    PERMISSION_REQUEST_CODE
-                )
-            }
-        }
+        scooterManager = WearScooterManager(this)
+        lockManager = LockManager(this)
+
+        Log.d("MAIN", "✅ Gestionnaires initialisés")
 
         setContent {
-            ScreenManagement()
+            val currentScreen = remember { mutableStateOf("scanner") }
+
+            when (currentScreen.value) {
+                "scanner" -> {
+                    ScannerScreen(
+                        scooterManager = scooterManager,
+                        context = this@MainActivity,
+                        onConnected = {
+                            Log.d("MAIN", "Navigation vers ControlScreen")
+                            currentScreen.value = "control"
+                        }
+                    )
+                }
+                "control" -> {
+                    ControlScreen(
+                        scooterManager = scooterManager,
+                        lockManager = lockManager,
+                        context = this@MainActivity,
+                        scooterName = "M0Robot",
+                        onBackClick = {
+                            Log.d("MAIN", "Retour au scanner")
+                            currentScreen.value = "scanner"
+                        }
+                    )
+                }
+            }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        scooterManager.disconnect()
+        lockManager.disconnect()
+        scooterManager.cleanup()
+        lockManager.cleanup()
+        Log.d("MAIN", "Cleanup terminé")
     }
 }

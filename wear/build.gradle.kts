@@ -78,7 +78,8 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
-
+    //BouncyCastle
+    implementation("org.bouncycastle:bcprov-jdk15on:1.70")
 
 
 }
