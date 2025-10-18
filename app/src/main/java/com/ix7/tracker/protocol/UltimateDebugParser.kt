@@ -223,9 +223,14 @@ object UltimateDebugParser {
         if (frame.size < 8) return null
 
         val speed = (frame[5].toInt() and 0xFF).toFloat()
-        val temperature = ((frame[6].toInt() and 0xFF) - 40).toFloat()
+
+        // ✅ ESSAYER DIFFÉRENTS OFFSETS POUR LA TEMPÉRATURE
+        // Offset [7] au lieu de [6]
+        val temperature = ((frame[7].toInt() and 0xFF) - 40).toFloat()
 
         Log.d(TAG, "  Speed=${speed.toInt()}km/h Temp=${String.format("%.1f", temperature)}°C")
+        Log.d(TAG, "  DEBUG: frame[5]=${frame[5]} frame[6]=${frame[6]} frame[7]=${frame[7]}")  // Pour déboguer
+
         return currentData.copy(speed = speed, temperature = temperature)
     }
 

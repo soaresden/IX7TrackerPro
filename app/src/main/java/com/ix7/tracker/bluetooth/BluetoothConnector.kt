@@ -8,11 +8,12 @@ import android.os.Looper
 import android.util.Log
 import com.ix7.tracker.core.ConnectionState
 import com.ix7.tracker.core.ScooterData
-import com.ix7.tracker.protocol.DebugParser // 🔥 NOUVEAU IMPORT
+import com.ix7.tracker.protocol.UltimateDebugParser
 import kotlinx.coroutines.*
 import java.util.*
 import com.ix7.tracker.core.WheelMode
 import com.ix7.tracker.protocol.ProtocolSimple
+import com.ix7.tracker.protocol.FrameAssembler
 
 /**
  * Gestionnaire de connexion Bluetooth GATT
@@ -22,7 +23,7 @@ class BluetoothConnector(
     private val context: Context,
     private val onDataReceived: (ScooterData) -> Unit,
     private val onStateChange: (ConnectionState) -> Unit,
-    private val onRawDataReceived: ((ByteArray) -> Unit)? = null  // ✅ CETTE LIGNE DOIT ÊTRE LÀ
+    private val onRawDataReceived: ((ByteArray) -> Unit)? = null
 ) {
 
 
@@ -41,6 +42,8 @@ class BluetoothConnector(
 
 
     }
+
+    private val frameAssembler = FrameAssembler()
 
     private var bluetoothGatt: BluetoothGatt? = null
     private var writeCharacteristic: BluetoothGattCharacteristic? = null
@@ -84,22 +87,25 @@ class BluetoothConnector(
             gatt: BluetoothGatt?,
             characteristic: BluetoothGattCharacteristic?
         ) {
-            characteristic?.value?.let { data ->
-                android.util.Log.d("BT_CONNECTOR", "📡 onCharacteristicChanged: ${data.size} bytes")
+            val data = characteristic?.value
+            if (data == null) return
 
-                // ✅ AJOUTER CETTE LIGNE POUR VOIR LE CONTENU
-                android.util.Log.d("BT_CONNECTOR", "📦 Contenu: ${data.joinToString(" ") { "%02X".format(it) }}")
+            Log.d("DEBUG_BT", "📥 Chunk reçu: ${data.size} bytes")
 
-                // ✅ AJOUT - Émettre les données brutes AVANT le parsing
-                onRawDataReceived?.invoke(data)
-                android.util.Log.d("BT_CONNECTOR", "✅ onRawDataReceived invoqué")
+            // Assembler les fragments en frames complètes
+            val completeFrames = frameAssembler.addData(data)
 
-                // 🔥 NOUVEAU : Utilise DebugParser au lieu de BluetoothDataHandler
-                val scooterData = DebugParser.parseFrame(data, currentScooterData)
+            for (frame in completeFrames) {
+                Log.d("DEBUG_BT", "📦 Frame complète: ${frame.size} bytes - ${frame.joinToString(" ") { "%02X".format(it) }}")
+
+                val scooterData = UltimateDebugParser.parseWithFullDebug(frame, currentScooterData)
 
                 if (scooterData != null) {
+                    Log.d("DEBUG_BT", "✅ PARSÉ: speed=${scooterData.speed}km/h battery=${scooterData.battery}%")
                     currentScooterData = scooterData
                     onDataReceived(scooterData)
+                } else {
+                    Log.d("DEBUG_BT", "❌ Parse failed")
                 }
             }
         }
@@ -163,11 +169,31 @@ class BluetoothConnector(
         isPolling = true
         Log.i(TAG, "🔄 Démarrage du polling")
 
+        var requestCounter = 0  // ✅ AJOUTER
+
         pollingRunnable = object : Runnable {
             override fun run() {
                 if (isPolling) {
                     scope.launch {
-                        sendCommand(ProtocolSimple.CMD_KEEP_ALIVE)
+                        // ✅ ALTERNER ENTRE DEUX COMMANDES
+                        val dataRequest = if (requestCounter % 2 == 0) {
+                            // Vitesse + Température
+                            byteArrayOf(
+                                0x61, 0x9E.toByte(), 0x32, 0x17, 0x35,
+                                0x0B, 0xA4.toByte(), 0x35, 0xA4.toByte(),
+                                0x35, 0x40, 0xCA.toByte()
+                            )
+                        } else {
+                            // Odomètre + Autres données
+                            byteArrayOf(
+                                0x61, 0x9E.toByte(), 0x1A, 0x17, 0x35,
+                                0x0B, 0xA4.toByte(), 0x35, 0xA4.toByte(),
+                                0x35, 0x40, 0xCA.toByte()
+                            )
+                        }
+
+                        requestCounter++  // ✅ INCRÉMENTER
+                        sendCommand(dataRequest)
                     }
                     handler.postDelayed(this, POLLING_INTERVAL_MS)
                 }
