@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Button
 import androidx.compose.material.ButtonDefaults
 import androidx.compose.material.Text
@@ -33,6 +34,7 @@ import com.ix7.tracker.wear.bluetooth.ConnectionState
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.util.Log
+import kotlinx.coroutines.delay
 
 @Composable
 fun ControlScreen(
@@ -50,19 +52,34 @@ fun ControlScreen(
     val lockConnected = lockState.isConnected
     val lockDetected = lockState.isDetected
 
-    // ✅ Setup: définir le password du cadenas et démarrer le scan
+    var lastScooterAddress by remember { mutableStateOf<String?>(null) }
+
+    // Setup: define password and start lock scanning
     LaunchedEffect(Unit) {
         lockManager.setPassword("896647")
-        Log.d("CONTROL_SCREEN", "Password set")
 
         try {
             val bluetoothAdapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
             if (bluetoothAdapter != null) {
                 lockManager.startScanning(bluetoothAdapter)
-                Log.d("CONTROL_SCREEN", "Lock scanning started")
             }
         } catch (e: Exception) {
             Log.e("CONTROL_SCREEN", "Error starting lock scan: ${e.message}")
+        }
+    }
+
+    // Auto-reconnect if scooter disconnects
+    LaunchedEffect(scooterConnected) {
+        if (!scooterConnected && lastScooterAddress != null) {
+            delay(1000)
+            try {
+                val bluetoothAdapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
+                if (bluetoothAdapter != null && lastScooterAddress != null) {
+                    scooterManager.connectToDevice(lastScooterAddress!!, bluetoothAdapter)
+                }
+            } catch (e: Exception) {
+                Log.e("CONTROL_SCREEN", "Auto-reconnect error: ${e.message}")
+            }
         }
     }
 
@@ -70,37 +87,35 @@ fun ControlScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .padding(top = 40.dp, start = 8.dp, end = 8.dp, bottom = 8.dp),
-        verticalArrangement = Arrangement.SpaceBetween
+            .padding(horizontal = 0.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
+        // ESPACE EN HAUT
+        Spacer(modifier = Modifier.height(24.dp))
+
         // ========== TROTTINETTE ==========
         Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .align(Alignment.CenterHorizontally)
+                .background(Color(0xFF1a1a1a), RoundedCornerShape(4.dp))
+                .padding(horizontal = 3.dp, vertical = 3.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 4.dp),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column {
-                    Text(
-                        text = "🛴 $scooterName",
-                        color = Color(0xFFFFD700),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "⚡ ${scooterData.battery}% | 🌡️ ${scooterData.temperature.toInt()}°C",
-                        color = Color.Gray,
-                        fontSize = 9.sp
-                    )
-                }
+                Text(
+                    text = scooterName,
+                    color = Color(0xFFFFD700),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
                 Text(
                     text = if (scooterConnected) "🟢" else "🔴",
-                    fontSize = 11.sp
+                    fontSize = 16.sp
                 )
             }
 
@@ -109,125 +124,113 @@ fun ControlScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(44.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(3.dp)
             ) {
-                // Statut trottinette
+                // Statut
                 Button(
                     onClick = { },
                     enabled = false,
-                    modifier = Modifier.size(44.dp),
+                    modifier = Modifier
+                        .size(44.dp),
                     shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(
                         disabledBackgroundColor = if (scooterConnected) Color(0xFFFFD700) else Color(0xFF555555)
                     ),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                 ) {
-                    Text(
-                        "⚡",
-                        fontSize = 16.sp,
-                        color = if (scooterConnected) Color.Black else Color.White
-                    )
+                    Text("⚡", fontSize = 20.sp, color = if (scooterConnected) Color.Black else Color.White)
                 }
 
-                // Lock scooter
+                // Lock
                 Button(
                     onClick = {
-                        Log.d("CONTROL", "🔒 Lock scooter cliqué")
-                        Log.d("CONTROL", "   txCharacteristic disponible")
-                        Log.d("CONTROL", "   connectionState: $connectionState")
                         scooterManager.lockScooter()
                     },
                     enabled = scooterConnected,
                     modifier = Modifier
                         .weight(1f)
-                        .size(44.dp),
+                        .height(44.dp),
                     shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(
                         backgroundColor = if (scooterConnected) Color(0xFF8B0000) else Color(0xFF4a2d2d)
                     ),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                 ) {
-                    Text("🔒", fontSize = 14.sp)
+                    Text("🔒", fontSize = 18.sp)
                 }
 
-                // Unlock scooter
+                // Unlock
                 Button(
                     onClick = {
-                        Log.d("CONTROL", "🔓 Unlock scooter cliqué")
-                        Log.d("CONTROL", "   txCharacteristic disponible")
-                        Log.d("CONTROL", "   connectionState: $connectionState")
                         scooterManager.unlockScooter()
                     },
                     enabled = scooterConnected,
                     modifier = Modifier
                         .weight(1f)
-                        .size(44.dp),
+                        .height(44.dp),
                     shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(
                         backgroundColor = if (scooterConnected) Color(0xFF2d5a2d) else Color(0xFF2d3a2d)
                     ),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                 ) {
-                    Text("🔓", fontSize = 14.sp)
+                    Text("🔓", fontSize = 18.sp)
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
-
         // ========== CADENAS ==========
         Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .weight(1f)
+                .align(Alignment.CenterHorizontally)
+                .background(Color(0xFF1a1a1a), RoundedCornerShape(4.dp))
+                .padding(horizontal = 3.dp, vertical = 3.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 4.dp),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
                     text = "🔐 Cadenas",
                     color = Color(0xFFFF6B6B),
-                    fontSize = 13.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = if (lockConnected) "🟢 ${if (lockState.isLocked) "🔒" else "🔓"}" else "🔴",
-                    fontSize = 11.sp
+                    fontSize = 14.sp
                 )
             }
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(44.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    .height(50.dp),
+                horizontalArrangement = Arrangement.spacedBy(3.dp)
             ) {
-                // Éclair cadenas - NOIR si pas détecté, GRIS si détecté mais pas connecté, JAUNE si connecté
+                // Éclair cadenas
                 Button(
                     onClick = {
-                        Log.d("CONTROL", "⚡ Éclair cadenas cliqué")
-                        Log.d("CONTROL", "   Detected: $lockDetected, Connected: $lockConnected")
-
                         if (!lockConnected && lockDetected) {
-                            Log.d("CONTROL", "Connexion au cadenas...")
                             try {
                                 val bluetoothAdapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
                                 if (bluetoothAdapter != null) {
                                     lockManager.connect(bluetoothAdapter)
                                 }
                             } catch (e: Exception) {
-                                Log.e("CONTROL", "Error connecting lock: ${e.message}")
+                                Log.e("CONTROL", "Error: ${e.message}")
                             }
                         } else if (lockConnected) {
-                            Log.d("CONTROL", "Déconnexion du cadenas...")
                             lockManager.disconnect()
                         }
                     },
                     enabled = lockDetected,
-                    modifier = Modifier.size(44.dp),
+                    modifier = Modifier
+                        .size(50.dp),
                     shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(
                         backgroundColor = when {
@@ -239,67 +242,72 @@ fun ControlScreen(
                     ),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                 ) {
-                    Text(
-                        "⚡",
-                        fontSize = 16.sp,
-                        color = when {
-                            lockConnected -> Color.Black
-                            else -> Color.White
-                        }
-                    )
+                    Text("⚡", fontSize = 22.sp, color = when {
+                        lockConnected -> Color.Black
+                        else -> Color.White
+                    })
                 }
 
                 // Lock cadenas
                 Button(
-                    onClick = {
-                        Log.d("CONTROL", "🔒 Lock cadenas cliqué")
-                        lockManager.lock()
-                    },
+                    onClick = { lockManager.lock() },
                     enabled = lockConnected,
                     modifier = Modifier
                         .weight(1f)
-                        .size(44.dp),
+                        .height(50.dp),
                     shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(
                         backgroundColor = if (lockConnected) Color(0xFF8B0000) else Color(0xFF4a2d2d)
                     ),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                 ) {
-                    Text("🔒", fontSize = 14.sp)
+                    Text("🔒", fontSize = 20.sp)
                 }
 
                 // Unlock cadenas
                 Button(
-                    onClick = {
-                        Log.d("CONTROL", "🔓 Unlock cadenas cliqué")
-                        lockManager.unlock()
-                    },
+                    onClick = { lockManager.unlock() },
                     enabled = lockConnected,
                     modifier = Modifier
                         .weight(1f)
-                        .size(44.dp),
+                        .height(50.dp),
                     shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(
                         backgroundColor = if (lockConnected) Color(0xFF2d5a2d) else Color(0xFF2d3a2d)
                     ),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                 ) {
-                    Text("🔓", fontSize = 14.sp)
+                    Text("🔓", fontSize = 20.sp)
                 }
             }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
-
-        Button(
-            onClick = onBackClick,
+        // Bottom buttons
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(30.dp),
-            colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF333333)),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                .padding(horizontal = 0.dp)
+                .height(28.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            Text("Retour", fontSize = 9.sp, color = Color.White)
+            Button(
+                onClick = {
+                    // Disconnect safely
+                    if (lockConnected) {
+                        lockManager.disconnect()
+                    }
+                    scooterManager.disconnect()
+                    onBackClick()
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxSize(),
+                colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF333333)),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                shape = RoundedCornerShape(3.dp)
+            ) {
+                Text("← Retour", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
