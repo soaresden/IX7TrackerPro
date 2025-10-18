@@ -15,6 +15,7 @@ import com.ix7.tracker.core.WheelMode
 import com.ix7.tracker.protocol.ProtocolSimple
 import com.ix7.tracker.protocol.FrameAssembler
 
+
 /**
  * Gestionnaire de connexion Bluetooth GATT
  * VERSION MODIFIÉE - Utilise DebugParser
@@ -44,6 +45,7 @@ class BluetoothConnector(
     }
 
     private val frameAssembler = FrameAssembler()
+    private val rawLogger = RawFrameLogger()  // ✅ AJOUTER
 
     private var bluetoothGatt: BluetoothGatt? = null
     private var writeCharacteristic: BluetoothGattCharacteristic? = null
@@ -90,22 +92,26 @@ class BluetoothConnector(
             val data = characteristic?.value
             if (data == null) return
 
-            Log.d("DEBUG_BT", "📥 Chunk reçu: ${data.size} bytes")
+            // ✅ LOG RAW AVANT TOUT
+            rawLogger.logRawChunk(data)
 
-            // Assembler les fragments en frames complètes
             val completeFrames = frameAssembler.addData(data)
 
             for (frame in completeFrames) {
-                Log.d("DEBUG_BT", "📦 Frame complète: ${frame.size} bytes - ${frame.joinToString(" ") { "%02X".format(it) }}")
+                // ✅ LOG CHAQUE FRAME COMPLÈTE
+                rawLogger.logCompleteFrame(frame)
 
                 val scooterData = UltimateDebugParser.parseWithFullDebug(frame, currentScooterData)
 
                 if (scooterData != null) {
-                    Log.d("DEBUG_BT", "✅ PARSÉ: speed=${scooterData.speed}km/h battery=${scooterData.battery}%")
+                    rawLogger.logParsedData(
+                        scooterData.speed,
+                        scooterData.battery,
+                        scooterData.temperature,
+                        scooterData.odometer
+                    )
                     currentScooterData = scooterData
                     onDataReceived(scooterData)
-                } else {
-                    Log.d("DEBUG_BT", "❌ Parse failed")
                 }
             }
         }
@@ -122,6 +128,12 @@ class BluetoothConnector(
             Log.e(TAG, "❌ Erreur connexion", e)
             Result.failure(e)
         }
+    }
+
+
+    // Appelle ça quand tu mets à jour les données dans l'UI
+    fun logCurrentAppState(speed: Float, battery: Float, temp: Float, odometer: Float, time: String) {
+        rawLogger.logParsedData(speed, battery, temp, odometer, time)
     }
 
     // Déconnexion
@@ -169,30 +181,15 @@ class BluetoothConnector(
         isPolling = true
         Log.i(TAG, "🔄 Démarrage du polling")
 
-        var requestCounter = 0  // ✅ AJOUTER
-
         pollingRunnable = object : Runnable {
             override fun run() {
                 if (isPolling) {
                     scope.launch {
-                        // ✅ ALTERNER ENTRE DEUX COMMANDES
-                        val dataRequest = if (requestCounter % 2 == 0) {
-                            // Vitesse + Température
-                            byteArrayOf(
-                                0x61, 0x9E.toByte(), 0x32, 0x17, 0x35,
-                                0x0B, 0xA4.toByte(), 0x35, 0xA4.toByte(),
-                                0x35, 0x40, 0xCA.toByte()
-                            )
-                        } else {
-                            // Odomètre + Autres données
-                            byteArrayOf(
-                                0x61, 0x9E.toByte(), 0x1A, 0x17, 0x35,
-                                0x0B, 0xA4.toByte(), 0x35, 0xA4.toByte(),
-                                0x35, 0x40, 0xCA.toByte()
-                            )
-                        }
-
-                        requestCounter++  // ✅ INCRÉMENTER
+                        // ✅ DEMANDER UNIQUEMENT 0x37 (données complètes)
+                        val dataRequest = byteArrayOf(
+                            0x61, 0x9E.toByte(), 0x37, 0x14, 0x55,
+                            0xDE.toByte(), 0x3C, 0xBD.toByte(), 0xCA.toByte()
+                        )
                         sendCommand(dataRequest)
                     }
                     handler.postDelayed(this, POLLING_INTERVAL_MS)

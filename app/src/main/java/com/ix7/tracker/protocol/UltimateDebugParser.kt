@@ -286,11 +286,18 @@ object UltimateDebugParser {
 
     // ==================== TYPE 0x3E - BATTERIE ====================
     private fun parse0x3E(frame: ByteArray, currentData: ScooterData): ScooterData? {
-        Log.d(TAG, "🔋 0x3E - BATTERIE")
-        if (frame.size < 8) return null
+        Log.d(TAG, "🔋 0x3E - BATTERIE (${frame.size} bytes)")
+        if (frame.size < 16) return null
 
-        val battery = (frame[7].toInt() and 0xFF).toFloat().coerceIn(0f, 100f)
+        // DEBUG: Show all bytes as 16-bit values
+        for (i in 5 until frame.size - 2 step 2) {
+            val value16 = ((frame[i].toInt() and 0xFF) shl 8) or (frame[i+1].toInt() and 0xFF)
+            Log.d(TAG, "  [{$i}-${i+1}] = 0x${String.format("%04X", value16)} (${value16})")
+        }
+
+        val battery = (frame[7].toInt() and 0xFF).toFloat()
         Log.d(TAG, "  Battery=${battery.toInt()}%")
+
         return currentData.copy(battery = battery)
     }
 
