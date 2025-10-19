@@ -2,6 +2,7 @@ package com.ix7.tracker.wear.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -42,7 +43,9 @@ fun ControlScreen(
     lockManager: LockManager,
     context: Context,
     scooterName: String = "M0Robot",
-    onBackClick: () -> Unit
+    lockName: String = "Iphone9",
+    onBackClick: () -> Unit,
+    onTripRecorder: () -> Unit = {}
 ) {
     val connectionState by scooterManager.connectionState.collectAsState()
     val lockState by lockManager.lockState.collectAsState()
@@ -100,19 +103,24 @@ fun ControlScreen(
                 .align(Alignment.CenterHorizontally)
                 .background(Color(0xFF1a1a1a), RoundedCornerShape(4.dp))
                 .padding(horizontal = 3.dp, vertical = 3.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = scooterName,
-                    color = Color(0xFFFFD700),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "🛴 $scooterName",
+                        color = Color(0xFFFFD700),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 Text(
                     text = if (scooterConnected) "🟢" else "🔴",
                     fontSize = 16.sp
@@ -122,23 +130,24 @@ fun ControlScreen(
             // 3 boutons ronds - Trottinette
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp),
-                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    .fillMaxWidth(0.75f)
+                    .align(Alignment.CenterHorizontally)
+                    .height(38.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 // Statut
                 Button(
                     onClick = { },
                     enabled = false,
                     modifier = Modifier
-                        .size(44.dp),
+                        .size(38.dp),
                     shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(
                         disabledBackgroundColor = if (scooterConnected) Color(0xFFFFD700) else Color(0xFF555555)
                     ),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                 ) {
-                    Text("⚡", fontSize = 20.sp, color = if (scooterConnected) Color.Black else Color.White)
+                    Text("⚡", fontSize = 16.sp, color = if (scooterConnected) Color.Black else Color.White)
                 }
 
                 // Lock
@@ -149,14 +158,14 @@ fun ControlScreen(
                     enabled = scooterConnected,
                     modifier = Modifier
                         .weight(1f)
-                        .height(44.dp),
+                        .height(38.dp),
                     shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(
                         backgroundColor = if (scooterConnected) Color(0xFF8B0000) else Color(0xFF4a2d2d)
                     ),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                 ) {
-                    Text("🔒", fontSize = 18.sp)
+                    Text("🔒", fontSize = 16.sp)
                 }
 
                 // Unlock
@@ -167,39 +176,45 @@ fun ControlScreen(
                     enabled = scooterConnected,
                     modifier = Modifier
                         .weight(1f)
-                        .height(44.dp),
+                        .height(38.dp),
                     shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(
                         backgroundColor = if (scooterConnected) Color(0xFF2d5a2d) else Color(0xFF2d3a2d)
                     ),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                 ) {
-                    Text("🔓", fontSize = 18.sp)
+                    Text("🔓", fontSize = 16.sp)
                 }
             }
         }
 
         // ========== CADENAS ==========
+        Spacer(modifier = Modifier.height(8.dp))
+
         Column(
             modifier = Modifier
                 .fillMaxWidth(0.95f)
-                .weight(1f)
                 .align(Alignment.CenterHorizontally)
                 .background(Color(0xFF1a1a1a), RoundedCornerShape(4.dp))
                 .padding(horizontal = 3.dp, vertical = 3.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "🔐 Cadenas",
-                    color = Color(0xFFFF6B6B),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "🔐 Cadenas $lockName",
+                        color = Color(0xFFFF6B6B),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 Text(
                     text = if (lockConnected) "🟢 ${if (lockState.isLocked) "🔒" else "🔓"}" else "🔴",
                     fontSize = 14.sp
@@ -208,9 +223,10 @@ fun ControlScreen(
 
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    .fillMaxWidth(0.75f)
+                    .align(Alignment.CenterHorizontally)
+                    .height(44.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 // Éclair cadenas
                 Button(
@@ -230,7 +246,7 @@ fun ControlScreen(
                     },
                     enabled = lockDetected,
                     modifier = Modifier
-                        .size(50.dp),
+                        .size(44.dp),
                     shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(
                         backgroundColor = when {
@@ -242,7 +258,7 @@ fun ControlScreen(
                     ),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                 ) {
-                    Text("⚡", fontSize = 22.sp, color = when {
+                    Text("⚡", fontSize = 18.sp, color = when {
                         lockConnected -> Color.Black
                         else -> Color.White
                     })
@@ -254,14 +270,14 @@ fun ControlScreen(
                     enabled = lockConnected,
                     modifier = Modifier
                         .weight(1f)
-                        .height(50.dp),
+                        .height(44.dp),
                     shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(
                         backgroundColor = if (lockConnected) Color(0xFF8B0000) else Color(0xFF4a2d2d)
                     ),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                 ) {
-                    Text("🔒", fontSize = 20.sp)
+                    Text("🔒", fontSize = 16.sp)
                 }
 
                 // Unlock cadenas
@@ -270,17 +286,20 @@ fun ControlScreen(
                     enabled = lockConnected,
                     modifier = Modifier
                         .weight(1f)
-                        .height(50.dp),
+                        .height(44.dp),
                     shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(
                         backgroundColor = if (lockConnected) Color(0xFF2d5a2d) else Color(0xFF2d3a2d)
                     ),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                 ) {
-                    Text("🔓", fontSize = 20.sp)
+                    Text("🔓", fontSize = 16.sp)
                 }
             }
         }
+
+        // Spacer pour remonter les boutons
+        Spacer(modifier = Modifier.height(20.dp))
 
         // Bottom buttons
         Row(
@@ -290,6 +309,20 @@ fun ControlScreen(
                 .height(28.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
+            // Bouton Trip Recorder
+            Button(
+                onClick = onTripRecorder,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxSize(),
+                colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF1a4d1a)),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                shape = RoundedCornerShape(3.dp)
+            ) {
+                Text("📍 Trip", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+            }
+
+            // Bouton Retour
             Button(
                 onClick = {
                     // Disconnect safely
@@ -306,7 +339,7 @@ fun ControlScreen(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
                 shape = RoundedCornerShape(3.dp)
             ) {
-                Text("← Retour", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                Text("← Retour", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
             }
         }
     }

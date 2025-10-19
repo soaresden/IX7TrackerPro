@@ -7,8 +7,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import com.ix7.tracker.wear.bluetooth.WearScooterManager
 import com.ix7.tracker.wear.bluetooth.LockManager
+import com.ix7.tracker.wear.ui.screens.SplashScreen
 import com.ix7.tracker.wear.ui.screens.ScannerScreen
 import com.ix7.tracker.wear.ui.screens.ControlScreen
+import com.ix7.tracker.wear.ui.screens.TripRecorderScreen
 import android.util.Log
 
 class MainActivity : ComponentActivity() {
@@ -22,18 +24,22 @@ class MainActivity : ComponentActivity() {
         scooterManager = WearScooterManager(this)
         lockManager = LockManager(this)
 
-        Log.d("MAIN", "✅ Gestionnaires initialisés")
-
         setContent {
-            val currentScreen = remember { mutableStateOf("scanner") }
+            val currentScreen = remember { mutableStateOf("splash") }
 
             when (currentScreen.value) {
+                "splash" -> {
+                    SplashScreen(
+                        onSplashComplete = {
+                            currentScreen.value = "scanner"
+                        }
+                    )
+                }
                 "scanner" -> {
                     ScannerScreen(
                         scooterManager = scooterManager,
                         context = this@MainActivity,
                         onConnected = {
-                            Log.d("MAIN", "Navigation vers ControlScreen")
                             currentScreen.value = "control"
                         }
                     )
@@ -44,9 +50,19 @@ class MainActivity : ComponentActivity() {
                         lockManager = lockManager,
                         context = this@MainActivity,
                         scooterName = "M0Robot",
+                        lockName = "Iphone9",
                         onBackClick = {
-                            Log.d("MAIN", "Retour au scanner")
                             currentScreen.value = "scanner"
+                        },
+                        onTripRecorder = {
+                            currentScreen.value = "trip_recorder"
+                        }
+                    )
+                }
+                "trip_recorder" -> {
+                    TripRecorderScreen(
+                        onBackClick = {
+                            currentScreen.value = "control"
                         }
                     )
                 }
@@ -60,6 +76,5 @@ class MainActivity : ComponentActivity() {
         lockManager.disconnect()
         scooterManager.cleanup()
         lockManager.cleanup()
-        Log.d("MAIN", "Cleanup terminé")
     }
 }
