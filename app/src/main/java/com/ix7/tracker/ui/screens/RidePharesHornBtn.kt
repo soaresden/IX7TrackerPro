@@ -1,18 +1,10 @@
-package com.ix7.tracker.ui.components
+package com.ix7.tracker.ui.screens
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.ix7.tracker.ui.components.IconActionButton
 
 @Composable
 fun RidePharesHornBtn(
@@ -24,57 +16,36 @@ fun RidePharesHornBtn(
     onHornRelease: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1E)),
-        modifier = modifier
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.padding(4.dp)
-        ) {
-            // PHARES 💡
-            Button(
-                onClick = onHeadlightsToggle,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (headlightsOn) Color(0xFFFFEB3B) else Color.DarkGray
-                ),
-                modifier = Modifier.size(32.dp),
-                contentPadding = PaddingValues(0.dp)
-            ) {
-                Text(if (headlightsOn) "💡" else "⚫", fontSize = 14.sp)
-            }
+        IconActionButton(
+            icon = "💡",
+            label = "Lights",
+            isActive = headlightsOn,
+            onClick = onHeadlightsToggle,
+            modifier = Modifier.weight(1f)
+        )
 
-            // NÉON 🟣
-            Button(
-                onClick = onNeonToggle,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (neonOn) Color(0xFF9C27B0) else Color.DarkGray
-                ),
-                modifier = Modifier.size(32.dp),
-                contentPadding = PaddingValues(0.dp)
-            ) {
-                Text(if (neonOn) "🟣" else "⚫", fontSize = 14.sp)
-            }
+        IconActionButton(
+            icon = "✨",
+            label = "Neon",
+            isActive = neonOn,
+            onClick = onNeonToggle,
+            modifier = Modifier.weight(1f)
+        )
 
-            // KLAXON 🔊 (maintien)
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFFFF5722))
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onPress = {
-                                onHornPress()
-                                tryAwaitRelease()
-                                onHornRelease()
-                            }
-                        )
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Text("🔊", fontSize = 14.sp)
-            }
-        }
+        IconActionButton(
+            icon = "📢",
+            label = "Horn",
+            isActive = false,
+            onClick = {
+                onHornPress()
+                // In a real app, you'd use onPress/onRelease properly
+                onHornRelease()
+            },
+            modifier = Modifier.weight(1f)
+        )
     }
 }

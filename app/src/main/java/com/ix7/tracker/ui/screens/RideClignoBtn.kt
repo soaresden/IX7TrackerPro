@@ -1,49 +1,42 @@
-package com.ix7.tracker.ui.components
+package com.ix7.tracker.ui.screens
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import com.ix7.tracker.ui.components.IconActionButton
 
 @Composable
 fun RideClignoBtn(
     modifier: Modifier = Modifier
 ) {
+    var leftSignalOn by remember { mutableStateOf(false) }
+    var rightSignalOn by remember { mutableStateOf(false) }
+
     Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        // GAUCHE ⬅️
-        Button(
-            onClick = { },
-            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-            enabled = false,
-            modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
-        ) {
-            Text("⬅️", fontSize = 20.sp)
-        }
+        IconActionButton(
+            icon = "⬅️",
+            label = "Left",
+            isActive = leftSignalOn,
+            onClick = { leftSignalOn = !leftSignalOn },
+            modifier = Modifier.weight(1f)
+        )
 
-        // WARNING ⚠️
-        Button(
-            onClick = { },
-            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-            enabled = false,
-            modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
-        ) {
-            Text("⚠️", fontSize = 20.sp)
-        }
-
-        // DROITE ➡️
-        Button(
-            onClick = { },
-            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-            enabled = false,
-            modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
-        ) {
-            Text("➡️", fontSize = 20.sp)
-        }
+        IconActionButton(
+            icon = "➡️",
+            label = "Right",
+            isActive = rightSignalOn,
+            onClick = { rightSignalOn = !rightSignalOn },
+            modifier = Modifier.weight(1f)
+        )
     }
 }
