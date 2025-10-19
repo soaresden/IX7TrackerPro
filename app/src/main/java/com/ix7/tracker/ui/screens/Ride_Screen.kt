@@ -70,7 +70,7 @@ fun RideScreen(
     }
 
     val maxSpeed = when (currentMode) {
-        RideMode.PEDESTRIAN -> speedLimits.pedestrian
+        RideMode.PIETON -> speedLimits.PIETON
         RideMode.ECO -> speedLimits.eco
         RideMode.SPORT -> speedLimits.sport
         RideMode.RACE -> speedLimits.race
@@ -313,7 +313,7 @@ fun RideScreen(
                             isUnlimited = isUnlimited,
                             onLimitedClick = {
                                 scope.launch {
-                                    bluetoothManager.connector?.setSpeedLimitMode(SpeedLimitMode.LIMITED)
+                                    bluetoothManager.connector?.setSpeedLimitMode(SpeedLimitMode.NORMAL)
                                 }
                             },
                             onUnlimitedClick = {
@@ -331,10 +331,10 @@ fun RideScreen(
                 ModSwitchBtn(
                     currentMode = localCurrentMode,
                     speedLimits = speedLimits,
-                    onPedestrianClick = {
-                        localCurrentMode = RideMode.PEDESTRIAN
+                    onPIETONClick = {
+                        localCurrentMode = RideMode.PIETON
                         scope.launch {
-                            bluetoothManager.sendCommand(ProtocolSimple.CMD_MODE_PEDESTRIAN)
+                            bluetoothManager.sendCommand(ProtocolSimple.CMD_MODE_PIETON)
                         }
                     },
                     onEcoClick = {

@@ -17,10 +17,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ix7.tracker.data.Trip
-import com.ix7.tracker.data.TripLocation
 import com.ix7.tracker.ui.components.HistogrammeComponent
 import com.ix7.tracker.ui.components.HistogrammeData
-import com.ix7.tracker.ui.screens.StatRowComponent
 import java.text.SimpleDateFormat
 import java.util.*
 

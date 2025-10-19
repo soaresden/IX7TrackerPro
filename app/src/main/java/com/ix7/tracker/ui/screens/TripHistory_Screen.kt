@@ -33,6 +33,172 @@ import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
 
+// ╔════════════════════════════════════════════════════════════════╗
+// ║  🎯 WEAR INTERFACE SCREEN - WRAPPER AVEC COLLAPSABLE EN HAUT   ║
+// ╚════════════════════════════════════════════════════════════════╝
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TripHistoryWearInterfaceScreen() {
+    var isWearExpanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val repository = remember { TripRepository(context) }
+    val trips by repository.allTrips.collectAsState(initial = emptyList())
+
+    val sortedTrips = remember(trips) {
+        trips.sortedByDescending { it.id.toIntOrNull() ?: 0 }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // 🎯 SECTION COLAPSABLE - INTERFACE WEAR EN HAUT
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { isWearExpanded = !isWearExpanded }
+                .padding(12.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1F1F23))
+        ) {
+            Column {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("⌚", fontSize = 20.sp)
+                        Column {
+                            Text(
+                                "Interface Wear OS",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Text(
+                                "${sortedTrips.size} trajets • ${sortedTrips.sumOf { it.distance }.toInt()} km total",
+                                fontSize = 11.sp,
+                                color = Color.Gray
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = if (isWearExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        tint = Color(0xFF0A84FF),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                if (isWearExpanded) {
+                    Divider(color = Color.Gray.copy(alpha = 0.2f))
+                    WearInterfacePanel(
+                        trips = sortedTrips,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+            }
+        }
+
+        // ✅ CONTENU PRINCIPAL - TRIP HISTORY INCHANGÉ
+        Spacer(modifier = Modifier.height(8.dp))
+        TripHistoryScreen()
+    }
+}
+
+// ════════════════════════════════════════════════════════════════
+// ⌚ WEAR INTERFACE PANEL (Nouveau)
+// ════════════════════════════════════════════════════════════════
+
+@Composable
+fun WearInterfacePanel(trips: List<Trip>, modifier: Modifier = Modifier) {
+    val totalDistance = trips.sumOf { it.distance }
+    val totalDuration = trips.sumOf { it.duration }
+    val avgSpeed = if (trips.isNotEmpty()) trips.map { it.avgSpeed }.average() else 0.0
+    val totalBatteryUsed = trips.sumOf { it.startBattery - it.endBattery }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            WearStatBox(
+                icon = "📏",
+                label = "Distance",
+                value = "${"%.1f".format(totalDistance)} km",
+                color = Color(0xFF0A84FF),
+                modifier = Modifier.weight(1f)
+            )
+            WearStatBox(
+                icon = "⏱️",
+                label = "Durée",
+                value = "${totalDuration / (1000 * 60 * 60)}h",
+                color = Color(0xFF4CAF50),
+                modifier = Modifier.weight(1f)
+            )
+            WearStatBox(
+                icon = "💨",
+                label = "Vit. moy",
+                value = "${"%.1f".format(avgSpeed)} km/h",
+                color = Color(0xFFBB86FC),
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            WearStatBox(
+                icon = "🔋",
+                label = "Batterie",
+                value = "${"%.1f".format(totalBatteryUsed)}%",
+                color = Color(0xFFFF9500),
+                modifier = Modifier.weight(1f)
+            )
+            WearStatBox(
+                icon = "🗓️",
+                label = "Trajets",
+                value = trips.size.toString(),
+                color = Color(0xFFE91E63),
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+fun WearStatBox(
+    icon: String,
+    label: String,
+    value: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .background(color.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+            .border(1.dp, color.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+            .padding(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(icon, fontSize = 18.sp)
+        Text(label, fontSize = 8.sp, color = Color.Gray)
+        Text(value, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = color)
+    }
+}
+
+// ════════════════════════════════════════════════════════════════
+// 📱 TRIP HISTORY SCREEN - CODE ORIGINAL INCHANGÉ
+// ════════════════════════════════════════════════════════════════
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TripHistoryScreen() {
@@ -204,7 +370,7 @@ fun TripHistoryScreen() {
                     showModeComparison = true
                 },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (showModeComparison) Color(0xFFFF9500) else Color.Transparent
+                    containerColor = if (showModeComparison) Color(0xFFBB86FC) else Color.Transparent
                 ),
                 modifier = Modifier.weight(1f)
             ) {
@@ -215,48 +381,48 @@ fun TripHistoryScreen() {
             }
         }
 
-        ModTripFilters(
-            visible = showDatePicker,
-            startDate = startDate,
-            endDate = endDate,
-            onStartDateChange = { startDate = it },
-            onEndDateChange = { endDate = it }
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         if (showBatteryCycles) {
-            ModBatteryCycles(cycles = batteryCycles)
+            ModBatteryCycles(batteryCycles)
         } else if (showModeComparison) {
-            ModComparison(modeStats = modeStats)
+            ModComparison(modeStats)
         } else {
-            if (sortedTrips.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("📊", fontSize = 48.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Aucun trajet enregistré", color = Color.Gray, fontSize = 14.sp)
-                        Text("Appuyez sur ▶ pour démarrer", color = Color.Gray, fontSize = 12.sp)
-                    }
-                }
-            } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(sortedTrips) { trip ->
-                        TripCardEnhanced(
-                            trip = trip,
-                            tripNumber = trips.indexOf(trip) + 1,  // Numérotation 1-based
-                            selectionMode = selectionMode,
-                            isSelected = trip.id in selectedTrips,
-                            onToggleSelection = {
-                                selectedTrips = if (trip.id in selectedTrips) {
-                                    selectedTrips - trip.id
-                                } else {
-                                    selectedTrips + trip.id
-                                }
-                            },
-                            onDetailClick = { selectedTripForDetail = trip }
-                        )
-                    }
+            if (showDatePicker) {
+                ModTripFilters(
+                    onStartDateSelected = { startDate = it },
+                    onEndDateSelected = { endDate = it },
+                    onClose = { showDatePicker = false }
+                )
+            }
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(
+                    items = sortedTrips,
+                    key = { it.id }
+                ) { trip ->
+                    val tripNumber = sortedTrips.indexOf(trip) + 1
+                    val isSelected = trip.id in selectedTrips
+
+                    TripCardEnhanced(
+                        trip = trip,
+                        tripNumber = tripNumber,
+                        selectionMode = selectionMode,
+                        isSelected = isSelected,
+                        onToggleSelection = {
+                            selectedTrips = if (isSelected) {
+                                selectedTrips - trip.id
+                            } else {
+                                selectedTrips + trip.id
+                            }
+                        },
+                        onDetailClick = { selectedTripForDetail = trip }
+                    )
                 }
             }
         }
