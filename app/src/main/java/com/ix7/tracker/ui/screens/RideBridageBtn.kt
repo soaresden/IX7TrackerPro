@@ -9,7 +9,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun ModBridageBtn(
+fun RideBridageBtn(
     isUnlimited: Boolean,
     onLimitedClick: () -> Unit,
     onUnlimitedClick: () -> Unit,

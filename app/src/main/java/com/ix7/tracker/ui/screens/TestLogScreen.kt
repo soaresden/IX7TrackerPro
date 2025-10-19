@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.sp
 import com.ix7.tracker.utils.LogManager
 
 @Composable
-fun LogScreen(logManager: LogManager) {
+fun TestLogScreen(logManager: LogManager) {
     val logs by logManager.logs.collectAsState()
     val context = LocalContext.current
 

@@ -21,7 +21,7 @@ import com.ix7.tracker.bluetooth.LockManager
 import com.ix7.tracker.bluetooth.LockState
 
 @Composable
-fun ModLockView(
+fun RideLockView(
     lockManager: LockManager,
     lockState: LockState,
     context: Context,

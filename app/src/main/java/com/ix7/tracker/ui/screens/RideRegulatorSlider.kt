@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun ModRegulatorSlider(
+fun RideRegulatorSlider(
     visible: Boolean,
     cruiseThreshold: Float,
     onValueChange: (Float) -> Unit,

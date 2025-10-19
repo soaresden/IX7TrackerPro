@@ -1,10 +1,8 @@
 package com.ix7.tracker.ui.screens
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
@@ -16,7 +14,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RegulatorTestScreen(
+fun TestRegulatorTestScreen(
     bluetoothManager: BluetoothRepository,
     isConnected: Boolean
 ) {

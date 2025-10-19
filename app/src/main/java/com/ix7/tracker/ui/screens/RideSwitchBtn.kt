@@ -12,7 +12,7 @@ import androidx.compose.ui.unit.sp
 import com.ix7.tracker.core.SpeedLimits
 
 @Composable
-fun ModSwitchBtn(
+fun RideSwitchBtn(
     currentMode: RideMode,
     speedLimits: SpeedLimits,
     onPIETONClick: () -> Unit,

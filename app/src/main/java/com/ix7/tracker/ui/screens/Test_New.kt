@@ -37,7 +37,7 @@ data class DecodedValue(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TestScreenNew(
+fun Test_New(
     bluetoothManager: BluetoothRepository,
     isConnected: Boolean,
     framesState: MutableMap<String, FrameMonitor>

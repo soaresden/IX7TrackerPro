@@ -12,7 +12,7 @@ import androidx.compose.ui.unit.sp
 import com.ix7.tracker.core.WheelMode
 
 @Composable
-fun ModWheelsBtn(
+fun RideWheelsBtn(
     wheelMode: WheelMode,
     onOneWheelClick: () -> Unit,
     onTwoWheelsClick: () -> Unit,

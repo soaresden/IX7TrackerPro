@@ -9,7 +9,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun ModClignoBtn(
+fun RideClignoBtn(
     modifier: Modifier = Modifier
 ) {
     Row(

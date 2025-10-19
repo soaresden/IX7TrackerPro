@@ -14,7 +14,7 @@ import com.ix7.tracker.core.ScooterData
 import com.ix7.tracker.core.TemperatureThresholds
 
 @Composable
-fun ModInfoRideView(
+fun RideInfoRideView(
     scooterData: ScooterData,
     modifier: Modifier = Modifier
 ) {

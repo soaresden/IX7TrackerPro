@@ -159,7 +159,7 @@ fun Ride_Screen(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 // 🎯 Compteur de vitesse - UTILISE LA VRAIE VITESSE de 0x32[5]
-                ModCompteurView(
+                RideCompteurView(
                     speed = if (isConnected) currentSpeed else 0f,
                     maxSpeed = displayMaxSpeed.toFloat(),
                     speedUnit = speedUnit,
@@ -183,7 +183,7 @@ fun Ride_Screen(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     // Lock/Unlock Trottinette
-                    ModParkingBtn(
+                    RideParkingBtn(
                         isLocked = isLocked,
                         onLock = {
                             scope.launch {
@@ -200,7 +200,7 @@ fun Ride_Screen(
                     )
 
                     // Phares, Néon, Klaxon
-                    ModPharesHornBtn(
+                    RidePharesHornBtn(
                         headlightsOn = headlightsOn,
                         neonOn = neonOn,
                         onHeadlightsToggle = {
@@ -242,7 +242,7 @@ fun Ride_Screen(
             }
 
             // Slider régulateur
-            ModRegulatorSlider(
+            RideRegulatorSlider(
                 visible = cruiseControl,
                 cruiseThreshold = cruiseThreshold,
                 onValueChange = { cruiseThreshold = it },
@@ -263,7 +263,7 @@ fun Ride_Screen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     // Roues
-                    ModWheelsBtn(
+                    RideWheelsBtn(
                         wheelMode = wheelMode,
                         onOneWheelClick = {
                             wheelMode = WheelMode.ONE_WHEEL
@@ -281,7 +281,7 @@ fun Ride_Screen(
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         // Régulateur
-                        ModRegulatorBtn(
+                        RideRegulatorBtn(
                             cruiseControl = cruiseControl,
                             onDisable = {
                                 scope.launch {
@@ -308,7 +308,7 @@ fun Ride_Screen(
                         )
 
                         // Bridage
-                        ModBridageBtn(
+                        RideBridageBtn(
                             isUnlimited = isUnlimited,
                             onLimitedClick = {
                                 scope.launch {
@@ -327,7 +327,7 @@ fun Ride_Screen(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 // Boutons de mode
-                ModSwitchBtn(
+                RideSwitchBtn(
                     currentMode = localCurrentMode,
                     speedLimits = speedLimits,
                     onPIETONClick = {
@@ -359,20 +359,20 @@ fun Ride_Screen(
         }
 
         // 3️⃣ SERRURE (si détectée)
-        ModLockView(
+        RideLockView(
             lockManager = lockManager,
             lockState = lockState,
             context = context
         )
 
         // 4️⃣ CLIGNOTANTS
-        ModClignoBtn()
+        RideClignoBtn()
 
         // 5️⃣ GRAPHIQUE + CONTRÔLES
         // 🎯 UTILISE LES VRAIES VALEURS:
         // - currentSpeed → de 0x32[5]
         // - scooterData.battery → de 0x20[45], 0x3E ou 0xD3[43]
-        ModGraphView(
+        RideGraphView(
             isRiding = isRiding,
             isPaused = isPaused,
             currentSpeed = currentSpeed,
@@ -389,6 +389,6 @@ fun Ride_Screen(
 
         // 6️⃣ INFOS
         // 🎯 AFFICHE LES VRAIES VALEURS de scooterData (décodées avec les bons offsets)
-        ModInfoRideView(scooterData = scooterData)
+        RideInfoRideView(scooterData = scooterData)
     }
 }

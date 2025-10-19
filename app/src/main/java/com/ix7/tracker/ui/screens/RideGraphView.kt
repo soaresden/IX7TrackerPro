@@ -23,7 +23,7 @@ import com.ix7.tracker.core.WheelMode
 import kotlinx.coroutines.launch
 
 @Composable
-fun ModGraphView(
+fun RideGraphView(
     isRiding: Boolean,
     isPaused: Boolean,
     currentSpeed: Float,

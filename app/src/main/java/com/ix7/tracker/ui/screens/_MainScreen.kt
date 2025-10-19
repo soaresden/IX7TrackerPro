@@ -5,7 +5,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ix7.tracker.bluetooth.BluetoothRepository
@@ -159,7 +158,7 @@ fun MainScreen(
 
                 3 -> TripHistory_Screen()
 
-                4 -> TestScreenNew(
+                4 -> Test_New(
                     bluetoothManager = bluetoothManager,
                     isConnected = connectionState == ConnectionState.CONNECTED,
                     framesState = framesState  // ✅ Passer le framesState au lieu du callback
