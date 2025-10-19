@@ -70,9 +70,9 @@ fun Ride_Screen(
 
     val maxSpeed = when (currentMode) {
         RideMode.PIETON -> speedLimits.PIETON
-        RideMode.ECO -> speedLimits.eco
-        RideMode.SPORT -> speedLimits.sport
-        RideMode.RACE -> speedLimits.race
+        RideMode.ECO -> speedLimits.ECO
+        RideMode.SPORT -> speedLimits.SPORT
+        RideMode.RACE -> speedLimits.RACE
     }
 
     val displayMaxSpeed = if (speedUnit == SpeedUnit.MPH) (maxSpeed * 0.621371).toInt() else maxSpeed

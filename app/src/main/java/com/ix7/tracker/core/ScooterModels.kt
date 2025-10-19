@@ -55,9 +55,9 @@ data class ScooterData(
 
 data class SpeedLimits(
     val PIETON: Int,
-    val eco: Int,
-    val race: Int,
-    val sport: Int
+    val ECO: Int,
+    val RACE: Int,
+    val SPORT: Int
 )
 
 // ============= ÉNUMÉRATIONS =============
