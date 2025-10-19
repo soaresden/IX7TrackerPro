@@ -36,7 +36,7 @@ fun BatteryCycleDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Cycle n°$cycleNumber", color = Color.White) },
+                title = { Text("Cycle $cycleNumber", color = Color.White) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(Icons.Default.ArrowBack, null, tint = Color.White)
@@ -56,7 +56,7 @@ fun BatteryCycleDetailScreen(
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 🔋 INFO CYCLE
+            // 🔋 EN-TÊTE DU CYCLE
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp),
@@ -66,7 +66,8 @@ fun BatteryCycleDetailScreen(
                     Text(
                         "Chargée à ${cycle.startBattery}% le ${dateFormat.format(cycle.startDate)} ${timeFormat.format(cycle.startDate)}",
                         fontSize = 12.sp,
-                        color = Color.White
+                        color = Color(0xFF4CAF50),
+                        fontWeight = FontWeight.Bold
                     )
 
                     Text(
@@ -78,32 +79,44 @@ fun BatteryCycleDetailScreen(
             }
 
             // 📊 STATS DU CYCLE
+            Text(
+                "Statistiques",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF2C2C2E))
             ) {
                 Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    StatRow("Batterie Utilisée", "$batteryUsed%", Color(0xFFFF3B30))
-                    StatRow("Temps écoulé", "$durationHours h ${"$durationMins".padStart(2, '0')} min", Color(0xFF0A84FF))
-                    StatRow("Distance Parcourue", "${"%.2f".format(cycle.distance)} km", Color(0xFF4CAF50))
+                    StatRowComponent("Batterie Utilisée", "$batteryUsed%", Color(0xFFFF3B30))
+                    StatRowComponent("Temps écoulé", "$durationHours h ${"$durationMins".padStart(2, '0')} min", Color(0xFF0A84FF))
+                    StatRowComponent("Distance Parcourue", "${"%.2f".format(cycle.distance)} km", Color(0xFF4CAF50))
 
                     if (cycle.duration > 0) {
-                        val autonomyPercent = cycle.distance / (cycle.duration / (1000f * 3600f))
-                        StatRow("Autonomie moyenne", "${"%.2f".format(autonomyPercent)} km/h", Color(0xFFBB86FC))
+                        val avgSpeed = cycle.distance / (cycle.duration / (1000f * 3600f))
+                        StatRowComponent("Vitesse moyenne", "${"%.2f".format(avgSpeed)} km/h", Color(0xFFBB86FC))
+
+                        val autonomieIntegrale = if (batteryUsed > 0) {
+                            (cycle.distance / batteryUsed) * 100
+                        } else 0f
+                        StatRowComponent("Autonomie à 100%", "${"%.1f".format(autonomieIntegrale)} km", Color(0xFF34C759))
                     }
                 }
             }
 
-            // 📈 GRAPHIQUE BATTERIE vs TEMPS (placeholder)
+            // 📈 GRAPHIQUE BATTERIE VS TEMPS
             Text(
-                "Graphique de batterie",
-                fontSize = 14.sp,
+                "Décharge de batterie",
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )
 
-            BatteryGraphPlaceholder(cycle)
+            BatteryGraphComponent(cycle)
 
             Spacer(modifier = Modifier.height(20.dp))
         }
@@ -111,74 +124,116 @@ fun BatteryCycleDetailScreen(
 }
 
 @Composable
-fun BatteryGraphPlaceholder(cycle: BatteryCycleData) {
+fun BatteryGraphComponent(cycle: BatteryCycleData) {
     val durationMinutes = cycle.duration / (1000 * 60)
+    val startBattery = cycle.startBattery
+    val endBattery = cycle.endBattery
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(200.dp)
+            .height(240.dp)
             .background(Color(0xFF2C2C2E), RoundedCornerShape(8.dp))
             .padding(12.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Axe Y (Batterie)
+        // Titre axes
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top
         ) {
-            Text("${cycle.startBattery}%", fontSize = 10.sp, color = Color.Gray)
-            Text("📉 Batterie", fontSize = 10.sp, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
+            Text("$startBattery%", fontSize = 10.sp, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
+            Text("Batterie", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
         }
 
-        // Graphique simplifié (ligne diagonale)
+        // Zone graphique
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
                 .background(Color(0xFF1C1C1E), RoundedCornerShape(4.dp))
         ) {
-            // Simulation d'une courbe de décharge
-            Text(
-                "📊 Graphique à implémenter avec Recharts",
-                fontSize = 11.sp,
-                color = Color.Gray,
-                modifier = Modifier.align(Alignment.Center)
-            )
+            // Grille de référence
+            repeat(5) { i ->
+                val y = (1f - i / 4f)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(0.5.dp)
+                        .background(Color.Gray.copy(alpha = 0.1f))
+                        .align(Alignment.TopStart)
+                        .offset(y = (240.dp - 24.dp - 12.dp) * y - 2.dp)
+                )
+            }
+
+            // Courbe linéaire simple (décharge)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Point de départ (haut)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(0.dp),
+                    horizontalArrangement = Arrangement.Start
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(Color(0xFF4CAF50), RoundedCornerShape(3.dp))
+                    )
+                }
+
+                // Point d'arrivée (bas)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(0.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(Color(0xFFFF3B30), RoundedCornerShape(3.dp))
+                    )
+                }
+            }
+
+            // Texte informatif
+            Column(
+                modifier = Modifier
+                    .align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    "📉 Graphique batterie",
+                    fontSize = 11.sp,
+                    color = Color.Gray
+                )
+                Text(
+                    "${cycle.startBattery}% → ${cycle.endBattery}%",
+                    fontSize = 10.sp,
+                    color = Color(0xFF4CAF50),
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
-        // Axe X (Temps)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom
-        ) {
-            Text("0 min", fontSize = 10.sp, color = Color.Gray)
-            Text("Temps ⏱️", fontSize = 10.sp, color = Color(0xFF0A84FF), fontWeight = FontWeight.Bold)
-            Text("$durationMinutes min", fontSize = 10.sp, color = Color.Gray)
-        }
-
-        // Label axes
+        // Axe X
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("${cycle.endBattery}%", fontSize = 10.sp, color = Color.Gray)
+            Text("0 min", fontSize = 10.sp, color = Color.Gray)
+            Text("Temps", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+            Text("$durationMinutes min", fontSize = 10.sp, color = Color.Gray)
         }
-    }
-}
-
-@Composable
-fun StatRow(label: String, value: String, color: Color) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(label, fontSize = 11.sp, color = Color.Gray)
-        Text(value, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = color)
     }
 }

@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import com.ix7.tracker.wear.WearDataSyncManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 // ===== ENTITÉ ROOM =====
 
@@ -59,6 +62,9 @@ interface TripDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTrips(trips: List<TripEntity>)
 
+    @Update
+    suspend fun updateTrip(trip: TripEntity)
+
     @Delete
     suspend fun deleteTrip(trip: TripEntity)
 
@@ -100,17 +106,17 @@ fun TripEntity.toTrip(): Trip {
         id = id,
         startDate = java.util.Date(startDate),
         startBattery = startBattery,
-        startOdometer = startOdometer,
+        startOdometer = startOdometer.toFloat(),
         startLocation = TripLocation(startLatitude, startLongitude, startAddress),
         endDate = java.util.Date(endDate),
         endBattery = endBattery,
-        endOdometer = endOdometer,
+        endOdometer = endOdometer.toFloat(),
         endLocation = TripLocation(endLatitude, endLongitude, endAddress),
-        distance = distance,
+        distance = distance.toFloat(),
         duration = duration,
-        maxSpeed = maxSpeed,
-        avgSpeed = avgSpeed,
-        energyUsed = energyUsed,
+        maxSpeed = maxSpeed.toFloat(),
+        avgSpeed = avgSpeed.toFloat(),
+        energyUsed = energyUsed.toFloat(),
         speedStats = SpeedStats(
             range0, range0_10, range10_20, range20_30,
             range30_40, range40_50, range50_60, rangeAbove60
@@ -128,21 +134,21 @@ fun Trip.toEntity(): TripEntity {
         id = id,
         startDate = startDate.time,
         startBattery = startBattery,
-        startOdometer = startOdometer,
+        startOdometer = startOdometer.toFloat(),
         startLatitude = startLocation.latitude,
         startLongitude = startLocation.longitude,
         startAddress = startLocation.address,
         endDate = endDate.time,
         endBattery = endBattery,
-        endOdometer = endOdometer,
+        endOdometer = endOdometer.toFloat(),
         endLatitude = endLocation.latitude,
         endLongitude = endLocation.longitude,
         endAddress = endLocation.address,
-        distance = distance,
+        distance = distance.toFloat(),
         duration = duration,
-        maxSpeed = maxSpeed,
-        avgSpeed = avgSpeed,
-        energyUsed = energyUsed,
+        maxSpeed = maxSpeed.toFloat(),
+        avgSpeed = avgSpeed.toFloat(),
+        energyUsed = energyUsed.toFloat(),
         range0 = speedStats.range0,
         range0_10 = speedStats.range0_10,
         range10_20 = speedStats.range10_20,
@@ -162,6 +168,8 @@ fun Trip.toEntity(): TripEntity {
 class TripRepository(context: Context) {
     private val database = TripDatabase.getDatabase(context)
     private val tripDao = database.tripDao()
+
+    private val wearSyncManager by lazy { WearDataSyncManager(context) }
 
     val last30Trips: Flow<List<Trip>> = tripDao.getLast30Trips().map { entities ->
         entities.map { it.toTrip() }
@@ -183,6 +191,16 @@ class TripRepository(context: Context) {
         return tripDao.getTripById(id)?.toTrip()
     }
 
+    suspend fun updateTrip(trip: Trip) = withContext(Dispatchers.IO) {
+        try {
+            tripDao.updateTrip(trip.toEntity())
+            android.util.Log.d("TripRepository", "✅ Trip ${trip.id} mis à jour")
+        } catch (e: Exception) {
+            android.util.Log.e("TripRepository", "❌ Erreur update: ${e.message}", e)
+            throw e
+        }
+    }
+
     suspend fun deleteTrip(trip: Trip) {
         tripDao.deleteTrip(trip.toEntity())
     }
@@ -193,5 +211,16 @@ class TripRepository(context: Context) {
 
     suspend fun getTripCount(): Int {
         return tripDao.getTripCount()
+    }
+
+    suspend fun syncToWear(trips: List<Trip>) = withContext(Dispatchers.IO) {
+        try {
+            val tripsToSync = trips.take(30)
+            wearSyncManager.syncTripsToWear(tripsToSync)
+            android.util.Log.d("TripRepository", "✅ ${tripsToSync.size} trips envoyés à la montre")
+        } catch (e: Exception) {
+            android.util.Log.e("TripRepository", "❌ Erreur sync: ${e.message}", e)
+            throw e
+        }
     }
 }

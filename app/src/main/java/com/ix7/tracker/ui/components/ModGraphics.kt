@@ -17,6 +17,9 @@ import androidx.compose.ui.unit.sp
 import com.ix7.tracker.data.SpeedStats
 import com.ix7.tracker.utils.TripUtils
 
+/**
+ * Affiche un histogramme des vitesses
+ */
 @Composable
 fun SpeedHistogram(
     speedStats: SpeedStats,
