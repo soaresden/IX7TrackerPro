@@ -18,14 +18,13 @@ import com.ix7.tracker.ui.components.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.ix7.tracker.tracker.TripRecorder
-import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import android.location.Location
 import com.ix7.tracker.protocol.ProtocolSimple
 
 
 @Composable
-fun RideScreen(
+fun Ride_Screen(
     scooterData: ScooterData,
     isConnected: Boolean,
     bluetoothManager: BluetoothRepository

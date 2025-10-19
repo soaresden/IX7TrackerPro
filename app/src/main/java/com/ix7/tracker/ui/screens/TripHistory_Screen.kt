@@ -20,10 +20,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ix7.tracker.data.*
-import com.ix7.tracker.ui.components.ModBatteryCycles
+import com.ix7.tracker.data.Trip
+import com.ix7.tracker.data.TripRepository
+import com.ix7.tracker.ui.components.BatteryCycleData
+import com.ix7.tracker.ui.components.BatteryCycles
 import com.ix7.tracker.ui.components.ModComparison
 import com.ix7.tracker.ui.components.ModTripFilters
+import com.ix7.tracker.ui.components.ModeStatsData
 import com.ix7.tracker.ui.components.toBatteryCyclesData
 import com.ix7.tracker.ui.components.toModeStatsData
 import com.ix7.tracker.utils.TripUtils
@@ -32,176 +35,12 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
+import com.ix7.tracker.ui.screens.TripHistoryTripListDetailScreen
 
-// ╔════════════════════════════════════════════════════════════════╗
-// ║  🎯 WEAR INTERFACE SCREEN - WRAPPER AVEC COLLAPSABLE EN HAUT   ║
-// ╚════════════════════════════════════════════════════════════════╝
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TripHistoryWearInterfaceScreen() {
-    var isWearExpanded by remember { mutableStateOf(false) }
-    val context = LocalContext.current
-    val repository = remember { TripRepository(context) }
-    val trips by repository.allTrips.collectAsState(initial = emptyList())
-
-    val sortedTrips = remember(trips) {
-        trips.sortedByDescending { it.id.toIntOrNull() ?: 0 }
-    }
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        // 🎯 SECTION COLAPSABLE - INTERFACE WEAR EN HAUT
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { isWearExpanded = !isWearExpanded }
-                .padding(12.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF1F1F23))
-        ) {
-            Column {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text("⌚", fontSize = 20.sp)
-                        Column {
-                            Text(
-                                "Interface Wear OS",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                            Text(
-                                "${sortedTrips.size} trajets • ${sortedTrips.sumOf { it.distance }.toInt()} km total",
-                                fontSize = 11.sp,
-                                color = Color.Gray
-                            )
-                        }
-                    }
-                    Icon(
-                        imageVector = if (isWearExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = null,
-                        tint = Color(0xFF0A84FF),
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-
-                if (isWearExpanded) {
-                    Divider(color = Color.Gray.copy(alpha = 0.2f))
-                    WearInterfacePanel(
-                        trips = sortedTrips,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
-            }
-        }
-
-        // ✅ CONTENU PRINCIPAL - TRIP HISTORY INCHANGÉ
-        Spacer(modifier = Modifier.height(8.dp))
-        TripHistoryScreen()
-    }
-}
-
-// ════════════════════════════════════════════════════════════════
-// ⌚ WEAR INTERFACE PANEL (Nouveau)
-// ════════════════════════════════════════════════════════════════
-
-@Composable
-fun WearInterfacePanel(trips: List<Trip>, modifier: Modifier = Modifier) {
-    val totalDistance = trips.sumOf { it.distance }
-    val totalDuration = trips.sumOf { it.duration }
-    val avgSpeed = if (trips.isNotEmpty()) trips.map { it.avgSpeed }.average() else 0.0
-    val totalBatteryUsed = trips.sumOf { it.startBattery - it.endBattery }
-
-    Column(modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            WearStatBox(
-                icon = "📏",
-                label = "Distance",
-                value = "${"%.1f".format(totalDistance)} km",
-                color = Color(0xFF0A84FF),
-                modifier = Modifier.weight(1f)
-            )
-            WearStatBox(
-                icon = "⏱️",
-                label = "Durée",
-                value = "${totalDuration / (1000 * 60 * 60)}h",
-                color = Color(0xFF4CAF50),
-                modifier = Modifier.weight(1f)
-            )
-            WearStatBox(
-                icon = "💨",
-                label = "Vit. moy",
-                value = "${"%.1f".format(avgSpeed)} km/h",
-                color = Color(0xFFBB86FC),
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            WearStatBox(
-                icon = "🔋",
-                label = "Batterie",
-                value = "${"%.1f".format(totalBatteryUsed)}%",
-                color = Color(0xFFFF9500),
-                modifier = Modifier.weight(1f)
-            )
-            WearStatBox(
-                icon = "🗓️",
-                label = "Trajets",
-                value = trips.size.toString(),
-                color = Color(0xFFE91E63),
-                modifier = Modifier.weight(1f)
-            )
-        }
-    }
-}
-
-@Composable
-fun WearStatBox(
-    icon: String,
-    label: String,
-    value: String,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .background(color.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-            .border(1.dp, color.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
-            .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(icon, fontSize = 18.sp)
-        Text(label, fontSize = 8.sp, color = Color.Gray)
-        Text(value, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = color)
-    }
-}
-
-// ════════════════════════════════════════════════════════════════
-// 📱 TRIP HISTORY SCREEN - CODE ORIGINAL INCHANGÉ
-// ════════════════════════════════════════════════════════════════
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun TripHistoryScreen() {
+fun TripHistory_Screen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val repository = remember { TripRepository(context) }
@@ -267,7 +106,7 @@ fun TripHistoryScreen() {
     // 📋 Affichage du détail du trajet si sélectionné
     if (selectedTripForDetail != null) {
         val tripNumber = sortedTrips.indexOf(selectedTripForDetail) + 1
-        TripDetailScreen(trip = selectedTripForDetail!!, tripNumber = tripNumber) {
+        TripHistoryTripListDetailScreen(trip = selectedTripForDetail!!, tripNumber = tripNumber) {
             selectedTripForDetail = null
         }
         return
@@ -275,7 +114,17 @@ fun TripHistoryScreen() {
 
     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
 
-        ModSyncWithWear()
+        // 🔄 COMPOSABLE COLLAPSABLE DE SYNCHRONISATION
+        TripHistoryWearInterfaceScreen(
+            trips = sortedTrips,
+            context = context,
+            onSyncPhone = { tripsToSync ->
+                syncWithWear(context, tripsToSync)
+            },
+            onSyncWatch = { tripsToSync ->
+                exportToJson(context, tripsToSync)
+            }
+        )
         Spacer(modifier = Modifier.height(12.dp))
 
         Row(
@@ -370,7 +219,7 @@ fun TripHistoryScreen() {
                     showModeComparison = true
                 },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (showModeComparison) Color(0xFFBB86FC) else Color.Transparent
+                    containerColor = if (showModeComparison) Color(0xFFFF9500) else Color.Transparent
                 ),
                 modifier = Modifier.weight(1f)
             ) {
@@ -381,57 +230,54 @@ fun TripHistoryScreen() {
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        ModTripFilters(
+            visible = showDatePicker,
+            startDate = startDate,
+            endDate = endDate,
+            onStartDateChange = { startDate = it },
+            onEndDateChange = { endDate = it }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         if (showBatteryCycles) {
-            ModBatteryCycles(batteryCycles)
+            BatteryCycles(cycles = batteryCycles)
         } else if (showModeComparison) {
-            ModComparison(modeStats)
+            ModComparison(modeStats = modeStats)
         } else {
-            if (showDatePicker) {
-                ModTripFilters(
-                    onStartDateSelected = { startDate = it },
-                    onEndDateSelected = { endDate = it },
-                    onClose = { showDatePicker = false }
-                )
-            }
-
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(
-                    items = sortedTrips,
-                    key = { it.id }
-                ) { trip ->
-                    val tripNumber = sortedTrips.indexOf(trip) + 1
-                    val isSelected = trip.id in selectedTrips
-
-                    TripCardEnhanced(
-                        trip = trip,
-                        tripNumber = tripNumber,
-                        selectionMode = selectionMode,
-                        isSelected = isSelected,
-                        onToggleSelection = {
-                            selectedTrips = if (isSelected) {
-                                selectedTrips - trip.id
-                            } else {
-                                selectedTrips + trip.id
-                            }
-                        },
-                        onDetailClick = { selectedTripForDetail = trip }
-                    )
+            if (sortedTrips.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("📊", fontSize = 48.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Aucun trajet enregistré", color = Color.Gray, fontSize = 14.sp)
+                        Text("Appuyez sur ▶ pour démarrer", color = Color.Gray, fontSize = 12.sp)
+                    }
+                }
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(sortedTrips) { trip ->
+                        TripCardEnhanced(
+                            trip = trip,
+                            tripNumber = trips.indexOf(trip) + 1,
+                            selectionMode = selectionMode,
+                            isSelected = trip.id in selectedTrips,
+                            onToggleSelection = {
+                                selectedTrips = if (trip.id in selectedTrips) {
+                                    selectedTrips - trip.id
+                                } else {
+                                    selectedTrips + trip.id
+                                }
+                            },
+                            onDetailClick = { selectedTripForDetail = trip }
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-/**
- * 📱 Carte de trajet améliorée avec plus d'infos
- */
 @Composable
 fun TripCardEnhanced(
     trip: Trip,
@@ -448,7 +294,6 @@ fun TripCardEnhanced(
     val durationHours = trip.duration / (1000 * 60 * 60)
     val durationMins = (trip.duration / (1000 * 60)) % 60
 
-    // 🌙 Vérifier si c'est un trajet nocturne (après minuit)
     val cal = Calendar.getInstance().apply { time = trip.startDate }
     val isNocturnal = cal.get(Calendar.HOUR_OF_DAY) < 4
 
@@ -457,105 +302,95 @@ fun TripCardEnhanced(
             .fillMaxWidth()
             .clickable(enabled = !selectionMode) { onDetailClick() }
             .border(
-                if (isSelected) 2.dp else 0.dp,
-                if (isSelected) Color(0xFF0A84FF) else Color.Transparent,
+                2.dp,
+                if (isSelected) Color(0xFF0A84FF) else Color.Gray.copy(alpha = 0.3f),
                 RoundedCornerShape(8.dp)
             ),
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF2C2C2E))
+        colors = CardDefaults.cardColors(
+            containerColor = if (isNocturnal) Color(0xFF1a1a2e) else Color(0xFF2C2C2E)
+        ),
+        shape = RoundedCornerShape(8.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            // 📌 Header avec sélection et numéro
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (selectionMode) {
-                    Checkbox(checked = isSelected, onCheckedChange = { onToggleSelection() })
-                }
-
-                Text(
-                    "Trajet n°$tripNumber",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (selectionMode) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = { onToggleSelection() },
+                    modifier = Modifier.size(24.dp),
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = Color(0xFF0A84FF),
+                        uncheckedColor = Color.Gray
+                    )
                 )
+            }
 
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
+            ) {
                 Text(
-                    dateFormat.format(trip.startDate),
+                    text = "#$tripNumber - ${dateFormat.format(trip.startDate)}",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0A84FF)
+                )
+                Text(
+                    text = "${timeFormat.format(trip.startDate)} → ${timeFormat.format(trip.endDate)}",
                     fontSize = 11.sp,
                     color = Color.Gray
                 )
-            }
 
-            Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-            // ⏰ Temps avec vérification nocturne
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Text("Jour : ", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
-                Text(
-                    "${timeFormat.format(trip.startDate)} → ${timeFormat.format(trip.endDate)}",
-                    fontSize = 11.sp,
-                    color = Color.White
-                )
-                if (isNocturnal) {
-                    Text(" (nocturne)", fontSize = 10.sp, color = Color(0xFF9933FF))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "🛴 ${String.format("%.1f", trip.distance)} km",
+                        fontSize = 11.sp,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "⏱️ ${durationHours}h ${durationMins}m",
+                        fontSize = 11.sp,
+                        color = Color.White
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "🔋 $batteryUsed% (${trip.startBattery}% → ${trip.endBattery}%)",
+                        fontSize = 11.sp,
+                        color = if (batteryUsed > 50) Color(0xFFFF3B30) else Color(0xFF4CAF50)
+                    )
+                    Text(
+                        text = "⚡ ${String.format("%.1f", trip.avgSpeed)} km/h moy",
+                        fontSize = 11.sp,
+                        color = Color(0xFFFF9500)
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // 📊 Stats en grille
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                StatBadge(
-                    label = "Distance",
-                    value = "${"%.1f".format(trip.distance)} km",
-                    color = Color(0xFF0A84FF),
-                    modifier = Modifier.weight(1f)
-                )
-                StatBadge(
-                    label = "Durée",
-                    value = "$durationHours h ${"$durationMins".padStart(2, '0')} min",
-                    color = Color(0xFF4CAF50),
-                    modifier = Modifier.weight(1f)
-                )
-                StatBadge(
-                    label = "Vitesse moy",
-                    value = "${"%.1f".format(trip.avgSpeed)} km/h",
-                    color = Color(0xFFBB86FC),
-                    modifier = Modifier.weight(1f)
-                )
-                StatBadge(
-                    label = "Batterie",
-                    value = "$batteryUsed%",
-                    color = Color(0xFFFF9500),
-                    modifier = Modifier.weight(1f)
-                )
-            }
+            Icon(
+                Icons.Default.ChevronRight,
+                null,
+                tint = Color.Gray,
+                modifier = Modifier.size(20.dp)
+            )
         }
-    }
-}
-
-@Composable
-fun StatBadge(
-    label: String,
-    value: String,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier
-            .background(color.copy(alpha = 0.1f), RoundedCornerShape(6.dp))
-            .border(1.dp, color.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
-            .padding(6.dp)
-    ) {
-        Text(label, fontSize = 9.sp, color = Color.Gray)
-        Text(value, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = color)
     }
 }
 
@@ -571,37 +406,12 @@ private fun exportToJson(context: Context, trips: List<Trip>) {
                 put("endDate", dateFormat.format(trip.endDate))
                 put("startBattery", trip.startBattery)
                 put("endBattery", trip.endBattery)
-                put("startOdometer", trip.startOdometer)
-                put("endOdometer", trip.endOdometer)
                 put("distance", trip.distance)
                 put("duration", trip.duration)
-                put("maxSpeed", trip.maxSpeed)
                 put("avgSpeed", trip.avgSpeed)
-                put("energyUsed", trip.energyUsed)
-                put("startLocation", JSONObject().apply {
-                    put("latitude", trip.startLocation.latitude)
-                    put("longitude", trip.startLocation.longitude)
-                    put("address", trip.startLocation.address)
-                })
-                put("endLocation", JSONObject().apply {
-                    put("latitude", trip.endLocation.latitude)
-                    put("longitude", trip.endLocation.longitude)
-                    put("address", trip.endLocation.address)
-                })
-                put("speedStats", JSONObject().apply {
-                    put("range0", trip.speedStats.range0)
-                    put("range0_10", trip.speedStats.range0_10)
-                    put("range10_20", trip.speedStats.range10_20)
-                    put("range20_30", trip.speedStats.range20_30)
-                    put("range30_40", trip.speedStats.range30_40)
-                    put("range40_50", trip.speedStats.range40_50)
-                    put("range50_60", trip.speedStats.range50_60)
-                    put("rangeAbove60", trip.speedStats.rangeAbove60)
-                })
                 put("settings", JSONObject().apply {
-                    put("RideMode", trip.settings.ridingMode.name)
+                    put("ridingMode", trip.settings.ridingMode.name)
                     put("driveMode", trip.settings.driveMode.name)
-                    put("SpeedLimitMode", trip.settings.speedLock.name)
                 })
             }
             jsonArray.put(tripJson)
@@ -620,7 +430,12 @@ private fun exportToJson(context: Context, trips: List<Trip>) {
     }
 }
 
-@Composable
-fun ModSyncWithWear() {
-    // Placeholder - à implémenter
+// 🔄 Sync avec Wear OS
+private suspend fun syncWithWear(context: Context, trips: List<Trip>) {
+    try {
+        android.util.Log.d("WearSync", "Sync lancée avec ${trips.size} trajets")
+        // TODO: Implémenter la sync réelle avec Wear OS
+    } catch (e: Exception) {
+        android.util.Log.e("WearSync", "Erreur sync: ${e.message}")
+    }
 }

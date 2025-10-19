@@ -15,7 +15,7 @@ import com.ix7.tracker.core.SpeedLimits
 fun ModSwitchBtn(
     currentMode: RideMode,
     speedLimits: SpeedLimits,
-    onPedestrianClick: () -> Unit,
+    onPIETONClick: () -> Unit,
     onEcoClick: () -> Unit,
     onRaceClick: () -> Unit,
     onSportClick: () -> Unit,
@@ -27,9 +27,9 @@ fun ModSwitchBtn(
     ) {
         // PIÉTON 🚶
         Button(
-            onClick = onPedestrianClick,
+            onClick = onPIETONClick,
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (currentMode == RideMode.PEDESTRIAN)
+                containerColor = if (currentMode == RideMode.PIETON)
                     Color(0xFF007AFF) else Color(0xFF3C3C3E)
             ),
             modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
@@ -37,7 +37,7 @@ fun ModSwitchBtn(
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("🚶", fontSize = 14.sp, color = Color.White)
-                Text("${speedLimits.pedestrian}", fontSize = 10.sp, color = Color.White)
+                Text("${speedLimits.PIETON}", fontSize = 10.sp, color = Color.White)
             }
         }
 

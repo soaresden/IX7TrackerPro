@@ -1,46 +1,92 @@
 package com.ix7.tracker.ui.components
 
-import com.ix7.tracker.data.BatteryCycle as DataBatteryCycle
-import com.ix7.tracker.data.ModeStats as DataModeStats
+import java.util.*
+
+// ════════════════════════════════════════════════════════════════
+// 🔄 DATA CONVERSION FUNCTIONS
+// ════════════════════════════════════════════════════════════════
 
 /**
- * Convertit une BatteryCycle du package data en BatteryCycleData pour les composables
+ * Convert any battery cycle object to BatteryCycleData
  */
-fun DataBatteryCycle.toBatteryCycleData(): BatteryCycleData {
+fun convertToBatteryCycleData(
+    cycleNumber: Int = 0,
+    startDate: Date,
+    endDate: Date,
+    startBattery: Int = 0,
+    endBattery: Int = 0,
+    tripCount: Int = 0
+): BatteryCycleData {
+    val cycleDifference = (startBattery - endBattery).coerceIn(0, 100)
+
     return BatteryCycleData(
-        startDate = this.startDate,
-        endDate = this.endDate,
-        startBattery = this.startBattery,
-        endBattery = this.endBattery,
-        distance = this.totalDistance,  // ✅ C'est totalDistance, pas distance
-        duration = this.totalDuration   // ✅ C'est totalDuration, pas duration
+        cycleNumber = cycleNumber,
+        startDate = startDate,
+        endDate = endDate,
+        startBattery = startBattery,
+        endBattery = endBattery,
+        tripCount = tripCount,
+        cycleDifference = cycleDifference
     )
 }
 
 /**
- * Convertit une liste de BatteryCycle du package data
+ * Convert to ModeStatsData with all stats
  */
-fun List<DataBatteryCycle>.toBatteryCyclesData(): List<BatteryCycleData> {
-    return this.map { it.toBatteryCycleData() }
-}
-
-/**
- * Convertit une ModeStats du package data en ModeStatsData pour les composables
- */
-fun DataModeStats.toModeStatsData(): ModeStatsData {
+fun convertToModeStatsData(
+    mode: String,
+    count: Int = 0,
+    avgDistance: Float = 0f,
+    avgDuration: Long = 0L,
+    avgSpeed: Float = 0f,
+    avgBatteryUsed: Float = 0f,
+    efficiency: Float = 0f,
+    maxSpeed: Float = 0f
+): ModeStatsData {
     return ModeStatsData(
-        modeName = this.settings.ridingMode.name,  // ✅ Extraire du settings
-        tripCount = this.tripCount,
-        totalDistance = this.totalDistance,
-        totalDuration = this.totalDuration,
-        avgBatteryUsage = this.avgBatteryConsumption,  // ✅ C'est avgBatteryConsumption, pas avgBatteryUsage
-        avgSpeed = this.avgSpeed
+        mode = mode,
+        modeName = mode,
+        count = count,
+        totalDuration = avgDuration,
+        avgSpeed = avgSpeed,
+        avgDistance = avgDistance,
+        avgDuration = avgDuration,
+        avgBatteryUsed = avgBatteryUsed,
+        efficiency = efficiency,
+        maxSpeed = maxSpeed
     )
 }
 
 /**
- * Convertit une liste de ModeStats du package data
+ * Build a list of BatteryCycleData from raw data
  */
-fun List<DataModeStats>.toModeStatsData(): List<ModeStatsData> {
-    return this.map { it.toModeStatsData() }
+fun buildBatteryCyclesList(cycles: List<Map<String, Any>>): List<BatteryCycleData> {
+    return cycles.mapIndexed { index, cycleData ->
+        convertToBatteryCycleData(
+            cycleNumber = index + 1,
+            startDate = (cycleData["startDate"] as? Date) ?: Date(),
+            endDate = (cycleData["endDate"] as? Date) ?: Date(),
+            startBattery = (cycleData["startBattery"] as? Int) ?: 0,
+            endBattery = (cycleData["endBattery"] as? Int) ?: 0,
+            tripCount = (cycleData["tripCount"] as? Int) ?: 0
+        )
+    }
+}
+
+/**
+ * Build a list of ModeStatsData from raw data
+ */
+fun buildModeStatsList(stats: List<Map<String, Any>>): List<ModeStatsData> {
+    return stats.map { modeData ->
+        convertToModeStatsData(
+            mode = (modeData["mode"] as? String) ?: "UNKNOWN",
+            count = (modeData["count"] as? Int) ?: 0,
+            avgDistance = (modeData["avgDistance"] as? Float) ?: 0f,
+            avgDuration = (modeData["avgDuration"] as? Long) ?: 0L,
+            avgSpeed = (modeData["avgSpeed"] as? Float) ?: 0f,
+            avgBatteryUsed = (modeData["avgBatteryUsed"] as? Float) ?: 0f,
+            efficiency = (modeData["efficiency"] as? Float) ?: 0f,
+            maxSpeed = (modeData["maxSpeed"] as? Float) ?: 0f
+        )
+    }
 }

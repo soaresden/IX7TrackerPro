@@ -151,13 +151,13 @@ fun MainScreen(
                     isConnected = connectionState == ConnectionState.CONNECTED
                 )
 
-                2 -> RideScreen(
+                2 -> Ride_Screen(
                     scooterData = scooterData,
                     isConnected = connectionState == ConnectionState.CONNECTED,
                     bluetoothManager = bluetoothManager
                 )
 
-                3 -> TripHistoryScreen()
+                3 -> TripHistory_Screen()
 
                 4 -> TestScreenNew(
                     bluetoothManager = bluetoothManager,

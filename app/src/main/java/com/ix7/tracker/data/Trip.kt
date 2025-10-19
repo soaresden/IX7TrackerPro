@@ -1,8 +1,8 @@
 package com.ix7.tracker.data
 
 import com.ix7.tracker.core.SpeedLimitMode
-import com.ix7.tracker.core.WheelMode
 import com.ix7.tracker.core.RideMode
+import com.ix7.tracker.core.WheelMode
 import java.util.Date
 
 // ===== MODÈLES MÉTIER =====

@@ -114,7 +114,7 @@ object ProtocolSimple {
     )
 
     // MODES DE CONDUITE
-    val CMD_MODE_PEDESTRIAN = byteArrayOf(
+    val CMD_MODE_PIETON = byteArrayOf(
         0x61, 0x9E.toByte(), 0x30, 0x14, 0x37, 0x4A, 0x37, 0x34, 0x63, 0xCB.toByte()
     )
 

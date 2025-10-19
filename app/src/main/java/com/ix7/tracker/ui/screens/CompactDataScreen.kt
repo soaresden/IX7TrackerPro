@@ -127,7 +127,7 @@ fun CompactDataScreen(
                 )
                 Text(
                     text = when (scooterData.currentMode) {
-                        RideMode.PEDESTRIAN -> "PIÉTON"
+                        RideMode.PIETON -> "PIÉTON"
                         RideMode.ECO -> "ECO"
                         RideMode.SPORT -> "SPORT"
                         RideMode.RACE -> "RACE"

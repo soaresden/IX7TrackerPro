@@ -15,8 +15,8 @@ import com.ix7.tracker.data.TripLocation
 import com.ix7.tracker.data.SpeedStats
 import com.ix7.tracker.data.TripSettings
 import com.ix7.tracker.core.RideMode
-import com.ix7.tracker.core.WheelMode
 import com.ix7.tracker.core.SpeedLimitMode
+import com.ix7.tracker.core.WheelMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -89,7 +89,7 @@ class WearableDataListener : WearableListenerService() {
                     settings = TripSettings(
                         ridingMode = tryParseEnum(tripMap.getString("ridingMode"), RideMode.ECO),
                         driveMode = tryParseEnum(tripMap.getString("driveMode"), WheelMode.TWO_WHEELS),
-                        speedLock = tryParseEnum(tripMap.getString("speedLock"), SpeedLimitMode.LIMITED)
+                        speedLock = tryParseEnum(tripMap.getString("speedLock"), SpeedLimitMode.NORMAL)
                     )
                 )
                 trips.add(trip)

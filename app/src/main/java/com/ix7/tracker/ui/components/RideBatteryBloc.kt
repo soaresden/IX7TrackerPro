@@ -41,6 +41,89 @@ fun RideBatteryBloc(cycles: List<BatteryCycleData>) {
         }
     }
 }
+
+@Composable
+fun BatteryCycleCard(cycle: BatteryCycleData) {
+    val dateFormat = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault())
+
+    // Calculer la durée à partir des dates
+    val durationMillis = cycle.endDate.time - cycle.startDate.time
+    val durationHours = durationMillis / (1000 * 60 * 60)
+    val durationMins = (durationMillis / (1000 * 60)) % 60
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF2C2C2E))
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Cycle #${cycle.cycleNumber}",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text(
+                        dateFormat.format(cycle.startDate),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text(
+                        "→ ${dateFormat.format(cycle.endDate)}",
+                        fontSize = 11.sp,
+                        color = Color.Gray
+                    )
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .background(Color(0xFF4CAF50).copy(alpha = 0.2f), RoundedCornerShape(6.dp))
+                        .padding(8.dp)
+                ) {
+                    Text(
+                        "${cycle.cycleDifference}%",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF4CAF50)
+                    )
+                    Text("batterie", fontSize = 9.sp, color = Color.Gray)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                StatColumn(
+                    label = "Batterie",
+                    value = "${cycle.startBattery}% → ${cycle.endBattery}%",
+                    color = Color(0xFF4CAF50)
+                )
+                StatColumn(
+                    label = "Durée",
+                    value = "$durationHours h ${durationMins.toString().padStart(2, '0')} min",
+                    color = Color(0xFF0A84FF)
+                )
+                StatColumn(
+                    label = "Trajets",
+                    value = "${cycle.tripCount}",
+                    color = Color(0xFFFF9500)
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun StatColumn(
     label: String,

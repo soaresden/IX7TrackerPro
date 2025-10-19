@@ -139,7 +139,7 @@ fun InfoScreen(scooterData: ScooterData, isConnected: Boolean) {
                             "-"
                         } else {
                             when (scooterData.currentMode.name) {
-                                "PEDESTRIAN" -> "🚶 Piéton"
+                                "PIETON" -> "🚶 Piéton"
                                 "ECO" -> "🌱 Eco"
                                 "SPORT" -> "⚡ Sport"
                                 "RACE" -> "🏎️ Race"

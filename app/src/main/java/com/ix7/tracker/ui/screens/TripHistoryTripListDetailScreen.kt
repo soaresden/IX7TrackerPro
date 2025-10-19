@@ -1,15 +1,13 @@
 package com.ix7.tracker.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -17,258 +15,147 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ix7.tracker.data.Trip
-import com.ix7.tracker.ui.components.HistogrammeComponent
-import com.ix7.tracker.ui.components.HistogrammeData
 import java.text.SimpleDateFormat
 import java.util.*
 
+// ════════════════════════════════════════════════════════════════
+// 📋 TRIP DETAIL SCREEN
+// ════════════════════════════════════════════════════════════════
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TripDetailScreen(trip: Trip, tripNumber: Int, onBackClick: () -> Unit) {
-    val dateFormat = SimpleDateFormat("EEE dd/MM/yyyy", Locale.getDefault())
-    val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-
+fun TripHistoryTripListDetailScreen(
+    trip: Trip,
+    tripNumber: Int,
+    onBack: () -> Unit
+) {
+    val dateFormat = SimpleDateFormat("EEE dd/MM/yyyy HH:mm:ss", Locale.getDefault())
     val batteryUsed = trip.startBattery - trip.endBattery
     val durationHours = trip.duration / (1000 * 60 * 60)
     val durationMins = (trip.duration / (1000 * 60)) % 60
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Trajet $tripNumber", color = Color.White) },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.ArrowBack, null, tint = Color.White)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF2C2C2E)
-                )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF1C1C1E))
+    ) {
+        // Header avec bouton retour
+        TopAppBar(
+            title = { Text("Trajet n°$tripNumber", fontWeight = FontWeight.Bold) },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = null, tint = Color.White)
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = Color(0xFF2C2C2E)
             )
-        }
-    ) { paddingValues ->
-        Column(
+        )
+
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // 📍 HORAIRES
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF2C2C2E))
-            ) {
-                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(dateFormat.format(trip.startDate), fontSize = 11.sp, color = Color.Gray)
-                            Text(
-                                timeFormat.format(trip.startDate),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF0A84FF)
-                            )
-                        }
-                        Text("→", fontSize = 16.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(dateFormat.format(trip.endDate), fontSize = 11.sp, color = Color.Gray)
-                            Text(
-                                timeFormat.format(trip.endDate),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF4CAF50)
-                            )
-                        }
-                    }
-
-                    Divider(color = Color.Gray.copy(alpha = 0.2f))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        StatRowComponent("Durée", "$durationHours h ${"$durationMins".padStart(2, '0')} min", Color(0xFF0A84FF), modifier = Modifier.weight(1f))
-                        StatRowComponent("Distance", "${"%.1f".format(trip.distance)} km", Color(0xFF4CAF50), modifier = Modifier.weight(1f))
-                        StatRowComponent("Batterie", "$batteryUsed%", Color(0xFFFF3B30), modifier = Modifier.weight(1f))
-                    }
+            item {
+                DetailSection("📊 Informations générales") {
+                    DetailRow("Date de début", dateFormat.format(trip.startDate))
+                    DetailRow("Date de fin", dateFormat.format(trip.endDate))
+                    DetailRow("Durée", "$durationHours h ${"$durationMins".padStart(2, '0')} min")
                 }
             }
 
-            // 📈 MODE & PARAMÈTRES (Simplifié)
-            Text(
-                "Mode & Paramètres",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-
-            ModeParametersCard(trip)
-
-            // 🏎️ VITESSES
-            Text(
-                "Statistiques de vitesse",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFF2C2C2E), RoundedCornerShape(8.dp))
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    StatRowComponent("Moyenne", "${"%.1f".format(trip.avgSpeed)} km/h", Color(0xFFBB86FC), modifier = Modifier.weight(1f))
-                    StatRowComponent("Maximale", "${"%.1f".format(trip.maxSpeed)} km/h", Color(0xFFFF9500), modifier = Modifier.weight(1f))
+            item {
+                DetailSection("📏 Distance et vitesse") {
+                    DetailRow("Distance", "${"%.2f".format(trip.distance)} km")
+                    DetailRow("Vitesse moyenne", "${"%.1f".format(trip.avgSpeed)} km/h")
+                    DetailRow("Vitesse max", "${"%.1f".format(trip.maxSpeed)} km/h")
                 }
             }
 
-            // 📊 DISTRIBUTION VITESSES
-            Text(
-                "Temps par plage de vitesse",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
+            item {
+                DetailSection("🔋 Batterie") {
+                    DetailRow("Batterie initiale", "${trip.startBattery}%")
+                    DetailRow("Batterie finale", "${trip.endBattery}%")
+                    DetailRow("Consommation", "$batteryUsed%")
+                    DetailRow("Énergie utilisée", "${"%.1f".format(trip.energyUsed)} Wh")
+                }
+            }
 
-            VitessDistributionHistogram(trip)
-
-            Spacer(modifier = Modifier.height(20.dp))
-        }
-    }
-}
-
-@Composable
-fun ModeParametersCard(trip: Trip) {
-    val rideModeName = trip.settings.ridingMode.name
-    val isDebride = trip.settings.driveMode.name.contains("Débridé", ignoreCase = true)
-
-    // Couleur selon mode
-    val modeColor = when (rideModeName.lowercase()) {
-        "pieton" -> Color(0xFF0A84FF) // Bleu
-        "eco" -> Color(0xFF4CAF50) // Vert
-        "race" -> Color(0xFFFF9500) // Orange
-        "sport" -> Color(0xFFFF3B30) // Rouge
-        else -> Color.Gray
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF2C2C2E))
-    ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Mode principal
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(modeColor.copy(alpha = 0.1f), RoundedCornerShape(6.dp))
-                    .border(1.dp, modeColor.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    rideModeName,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = modeColor
-                )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    // Trait bridé/débridé
-                    Box(
-                        modifier = Modifier
-                            .width(if (isDebride) 8.dp else 4.dp)
-                            .height(2.dp)
-                            .background(modeColor, RoundedCornerShape(1.dp))
+            item {
+                DetailSection("📍 Localisation") {
+                    DetailRow(
+                        "Départ",
+                        "${trip.startLocation.address}\n${trip.startLocation.latitude}, ${trip.startLocation.longitude}"
                     )
-                    if (isDebride) {
-                        Box(
-                            modifier = Modifier
-                                .width(8.dp)
-                                .height(2.dp)
-                                .background(modeColor, RoundedCornerShape(1.dp))
-                        )
-                    }
+                    DetailRow(
+                        "Arrivée",
+                        "${trip.endLocation.address}\n${trip.endLocation.latitude}, ${trip.endLocation.longitude}"
+                    )
                 }
             }
 
-            // Détails
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                StatRowComponent(
-                    "État",
-                    if (isDebride) "Débridé ⚡" else "Bridé",
-                    modeColor,
-                    modifier = Modifier.weight(1f)
-                )
-                StatRowComponent(
-                    "Speedlock",
-                    trip.settings.speedLock.name,
-                    Color(0xFFBB86FC),
-                    modifier = Modifier.weight(1f)
-                )
+            item {
+                DetailSection("⚙️ Paramètres") {
+                    DetailRow("Mode de conduite", trip.settings.ridingMode.name)
+                    DetailRow("Mode de conduite", trip.settings.driveMode.name)
+                    DetailRow("Limite de vitesse", trip.settings.speedLock.name)
+                }
+            }
+
+            item {
+                DetailSection("📈 Statistiques de vitesse") {
+                    DetailRow("0 km/h", "${trip.speedStats.range0} fois")
+                    DetailRow("0-10 km/h", "${trip.speedStats.range0_10} fois")
+                    DetailRow("10-20 km/h", "${trip.speedStats.range10_20} fois")
+                    DetailRow("20-30 km/h", "${trip.speedStats.range20_30} fois")
+                    DetailRow("30-40 km/h", "${trip.speedStats.range30_40} fois")
+                    DetailRow("40-50 km/h", "${trip.speedStats.range40_50} fois")
+                    DetailRow("50-60 km/h", "${trip.speedStats.range50_60} fois")
+                    DetailRow("> 60 km/h", "${trip.speedStats.rangeAbove60} fois")
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
 }
 
 @Composable
-fun VitessDistributionHistogram(trip: Trip) {
-    val totalSeconds = trip.duration / 1000
-
-    val ranges = listOf(
-        "0 km/h" to trip.speedStats.range0,
-        "0-10" to trip.speedStats.range0_10,
-        "10-20" to trip.speedStats.range10_20,
-        "20-30" to trip.speedStats.range20_30,
-        "30-40" to trip.speedStats.range30_40,
-        "40-50" to trip.speedStats.range40_50,
-        "50-60" to trip.speedStats.range50_60,
-        ">60" to trip.speedStats.rangeAbove60
-    )
-
-    val maxSeconds = ranges.maxOf { it.second }
-
-    val histoData = ranges.map { (label, seconds) ->
-        val percentage = if (totalSeconds > 0) (seconds.toFloat() / totalSeconds * 100) else 0f
-        HistogrammeData(
-            label = label,
-            value = seconds,
-            percentage = percentage,
-            color = when {
-                label.contains("0 km/h") -> Color(0xFF999999)
-                label.contains("0-10") -> Color(0xFF0A84FF)
-                label.contains("10-20") -> Color(0xFF4CAF50)
-                label.contains("20-30") -> Color(0xFFFF9500)
-                label.contains("30-40") -> Color(0xFFFF3B30)
-                label.contains("40-50") -> Color(0xFFBB86FC)
-                label.contains("50-60") -> Color(0xFF34C759)
-                else -> Color(0xFF5856D6)
-            }
+private fun DetailSection(
+    title: String,
+    content: @Composable () -> Unit
+) {
+    Column {
+        Text(
+            title,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF0A84FF),
+            modifier = Modifier.padding(bottom = 8.dp)
         )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(8.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF2C2C2E))
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                content()
+            }
+        }
     }
-
-    HistogrammeComponent(
-        data = histoData,
-        maxValue = maxSeconds,
-        displayFormat = { seconds -> "${seconds / 60}m ${seconds % 60}s" }
-    )
 }
 
-// ✅ StatRowComponent importé de ScreenUtils.kt
+@Composable
+private fun DetailRow(
+    label: String,
+    value: String
+) {
+    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+        Text(label, fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
+        Text(value, fontSize = 13.sp, color = Color.White)
+    }
+}

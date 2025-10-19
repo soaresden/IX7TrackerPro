@@ -191,7 +191,7 @@ object UltimateDebugParser {
         when (cmd) {
             0x4A -> {
                 val mode = when (val6) {
-                    0x37 -> RideMode.PEDESTRIAN
+                    0x37 -> RideMode.PIETON
                     0x36 -> RideMode.ECO
                     0x35 -> RideMode.RACE
                     0x34 -> RideMode.SPORT
@@ -258,7 +258,7 @@ object UltimateDebugParser {
 
         val modeId = frame[20].toInt() and 0x0F
         val mode = when (modeId) {
-            0x01 -> RideMode.PEDESTRIAN
+            0x01 -> RideMode.PIETON
             0x02 -> RideMode.ECO
             0x03 -> RideMode.SPORT
             0x04 -> RideMode.RACE

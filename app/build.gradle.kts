@@ -105,4 +105,19 @@ dependencies {
     // Sync avec Android Wear
     implementation("com.google.android.gms:play-services-wearable:18.0.0")
 
+    // Gson pour l'export JSON
+    implementation("com.google.code.gson:gson:2.10.1")
+
+    // Compose et Material3
+    implementation("androidx.compose.ui:ui:1.5.0")
+    implementation("androidx.compose.material3:material3:1.1.0")
+    implementation("androidx.compose.material:material-icons-extended:1.5.0")
+
+    // File Provider
+    implementation("androidx.core:core:1.10.1")
+
+    // Coroutines
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.1")
+
 }

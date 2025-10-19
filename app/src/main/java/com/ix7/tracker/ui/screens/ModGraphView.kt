@@ -2,7 +2,6 @@ package com.ix7.tracker.ui.components
 
 import android.location.Location
 import com.ix7.tracker.core.SpeedLimitMode
-import com.ix7.tracker.core.WheelMode
 import com.ix7.tracker.core.RideMode
 import android.util.Log
 import androidx.compose.foundation.Canvas
@@ -20,6 +19,7 @@ import androidx.compose.ui.unit.sp
 import com.ix7.tracker.data.*
 import com.ix7.tracker.tracker.TripRecorder
 import com.google.android.gms.location.LocationServices
+import com.ix7.tracker.core.WheelMode
 import kotlinx.coroutines.launch
 
 @Composable
@@ -130,7 +130,7 @@ fun ModGraphView(
                                 location = location,
                                 settings = TripSettings(
                                     ridingMode = when(currentMode) {
-                                        com.ix7.tracker.core.RideMode.PEDESTRIAN -> RideMode.PEDESTRIAN
+                                        com.ix7.tracker.core.RideMode.PIETON -> RideMode.PIETON
                                         com.ix7.tracker.core.RideMode.ECO -> RideMode.ECO
                                         com.ix7.tracker.core.RideMode.SPORT -> RideMode.SPORT
                                         com.ix7.tracker.core.RideMode.RACE -> RideMode.RACE
@@ -139,7 +139,7 @@ fun ModGraphView(
                                         com.ix7.tracker.core.WheelMode.ONE_WHEEL -> WheelMode.ONE_WHEEL
                                         com.ix7.tracker.core.WheelMode.TWO_WHEELS -> WheelMode.TWO_WHEELS
                                     },
-                                    speedLock = if (isUnlimited) SpeedLimitMode.UNLIMITED else SpeedLimitMode.LIMITED
+                                    speedLock = if (isUnlimited) SpeedLimitMode.UNLIMITED else SpeedLimitMode.NORMAL
                                 )
                             )
                             Log.i("ModGraphView", "🟢 Enregistrement démarré")

@@ -8,10 +8,10 @@ import android.os.Looper
 import android.util.Log
 import com.ix7.tracker.core.ConnectionState
 import com.ix7.tracker.core.ScooterData
+import com.ix7.tracker.core.WheelMode
 import com.ix7.tracker.protocol.UltimateDebugParser
 import kotlinx.coroutines.*
 import java.util.*
-import com.ix7.tracker.core.WheelMode
 import com.ix7.tracker.protocol.ProtocolSimple
 import com.ix7.tracker.protocol.FrameAssembler
 
