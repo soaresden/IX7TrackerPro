@@ -5,15 +5,18 @@ import com.ix7.tracker.core.SpeedUnit
 import com.ix7.tracker.core.WheelMode
 
 /**
- * 📊 État GROUPÉ du RideScreen
+ * 📊 ÉTAT GROUPÉ du RideScreen
  *
- * Centralise tous les états pour:
+ * Centralise tous les états UI pour:
  * - Meilleure lisibilité
- * - Faciliter la sérialisation
  * - Passer à ViewModel plus tard
+ * - Faciliter la sérialisation
+ *
+ * AVANT: 15 états individuels `var ... by remember { ... }`
+ * APRÈS: 1 data class cohérente
  */
 data class RideScreenState(
-    // ===== CONFIGURATION =====
+    // ===== CONFIGURATION UTILISATEUR =====
     val wheelMode: WheelMode = WheelMode.TWO_WHEELS,
     val speedUnit: SpeedUnit = SpeedUnit.KMH,
 
@@ -21,7 +24,7 @@ data class RideScreenState(
     val isRiding: Boolean = false,
     val isPaused: Boolean = false,
 
-    // ===== RÉGULATEUR =====
+    // ===== RÉGULATEUR DE VITESSE =====
     val cruiseControl: Boolean = false,
     val cruiseThreshold: Float = 25f,
 
@@ -32,7 +35,8 @@ data class RideScreenState(
 )
 
 /**
- * 🎬 Actions disponibles sur le state
+ * 🎬 Actions possibles sur l'état
+ * Utilisé avec le reducer pour transformer l'état
  */
 sealed class RideScreenAction {
     // Configuration
@@ -57,9 +61,15 @@ sealed class RideScreenAction {
 }
 
 /**
- * 🔄 Reducer pour transformer l'état
+ * 🔄 Reducer: Transforme l'état selon les actions
+ *
+ * État immutable = plus facile à debugger
+ * Peut être testé séparément de l'UI
  */
-fun rideScreenReducer(state: RideScreenState, action: RideScreenAction): RideScreenState {
+fun rideScreenReducer(
+    state: RideScreenState,
+    action: RideScreenAction
+): RideScreenState {
     return when (action) {
         // Configuration
         is RideScreenAction.SetWheelMode -> state.copy(wheelMode = action.mode)

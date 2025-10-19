@@ -21,7 +21,7 @@ fun RidePharesHornBtn(
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         IconActionButton(
-            icon = "💡",
+            icon = "🟡",
             label = "Lights",
             isActive = headlightsOn,
             onClick = onHeadlightsToggle,
@@ -29,7 +29,7 @@ fun RidePharesHornBtn(
         )
 
         IconActionButton(
-            icon = "✨",
+            icon = "🟣",
             label = "Neon",
             isActive = neonOn,
             onClick = onNeonToggle,

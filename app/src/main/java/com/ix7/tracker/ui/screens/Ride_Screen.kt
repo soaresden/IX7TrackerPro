@@ -80,7 +80,7 @@ fun Ride_Screen(
 
     // 📏 Convertir vitesses selon l'unité (utilise SpeedConverter)
     val displayMaxSpeed = SpeedConverter.convertMaxSpeed(maxSpeed, rideState.speedUnit)
-    val currentSpeed = SpeedConverter.convertCurrentSpeed(scooterData.speed, rideState.speedUnit)
+    val currentSpeed = SpeedConverter.convertCurrentSpeed(scooterData.speed.toInt(), rideState.speedUnit)
 
     // ═══════════════════════════════════════════════════════════════
     // 3️⃣ INITIALISATION (Lancé 1 seule fois)
@@ -124,7 +124,7 @@ fun Ride_Screen(
             ) {
                 // Compteur de vitesse
                 RideCompteurView(
-                    speed = if (isConnected) currentSpeed else 0f,
+                    speed = if (isConnected) currentSpeed.toFloat() else 0f,
                     maxSpeed = displayMaxSpeed.toFloat(),
                     speedUnit = rideState.speedUnit,
                     onUnitClick = {
@@ -136,13 +136,9 @@ fun Ride_Screen(
                             }
                             rideState = rideState.copy(speedUnit = newUnit)
 
-                            // Envoyer la commande
-                            val cmd = if (newUnit.name == "KMH") {
-                                RideCommands.setUnitKMH()
-                            } else {
-                                RideCommands.setUnitMPH()
-                            }
-                            bluetoothManager.sendCommand(cmd)
+                            // ✅ NOTE: L'unité est une préférence locale
+                            // Le scooter M0Robot n'a pas de commande pour changer d'unité
+                            // Donc on ne l'envoie pas par Bluetooth
                         }
                     },
                     modifier = Modifier.weight(1f)
@@ -177,10 +173,10 @@ fun Ride_Screen(
                         onHeadlightsToggle = {
                             scope.launch {
                                 if (rideState.headlightsOn) {
-                                    bluetoothManager.sendCommand(RideCommands.lightsOff())
+                                    bluetoothManager.sendCommand(RideCommands.headlightsOff())
                                     rideState = rideState.copy(headlightsOn = false)
                                 } else {
-                                    bluetoothManager.sendCommand(RideCommands.lightsOn())
+                                    bluetoothManager.sendCommand(RideCommands.headlightsOn())
                                     rideState = rideState.copy(headlightsOn = true)
                                 }
                             }
@@ -339,7 +335,7 @@ fun Ride_Screen(
         RideGraphView(
             isRiding = rideState.isRiding,
             isPaused = rideState.isPaused,
-            currentSpeed = currentSpeed,
+            currentSpeed = currentSpeed.toFloat(),
             currentBattery = scooterData.battery,
             maxSpeed = displayMaxSpeed.toFloat(),
             scooterData = scooterData,

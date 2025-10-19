@@ -114,7 +114,7 @@ fun RideGraphView(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            // PLAY ▶
+            // REC ⏺️
             Button(
                 onClick = {
                     onStart()
@@ -152,7 +152,7 @@ fun RideGraphView(
                 enabled = !isRiding || isPaused,
                 modifier = Modifier.weight(1f).padding(horizontal = 2.dp)
             ) {
-                Text("▶", fontSize = 20.sp)
+                Text("⏺", fontSize = 20.sp)
             }
 
             // PAUSE ⏸
