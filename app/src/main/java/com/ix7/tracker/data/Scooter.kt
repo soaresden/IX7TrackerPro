@@ -1,9 +1,8 @@
-package com.ix7.tracker.data
+package com.ix7.tracker.data.sync
 
 import com.ix7.tracker.core.RideMode
 import com.ix7.tracker.core.WheelMode
 import com.ix7.tracker.core.SpeedLimitMode
-import java.util.*
 
 data class Scooter(
     val name: String,
