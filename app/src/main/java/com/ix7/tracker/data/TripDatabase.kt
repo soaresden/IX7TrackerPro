@@ -1,13 +1,12 @@
 package com.ix7.tracker.data
 
 import android.content.Context
-import com.ix7.tracker.core.SpeedLimitMode
-import com.ix7.tracker.core.WheelMode
-import com.ix7.tracker.core.RideMode
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
-// Entité Trip pour Room
+// ===== ENTITÉ ROOM =====
+
 @Entity(tableName = "trips")
 data class TripEntity(
     @PrimaryKey val id: String,
@@ -28,8 +27,6 @@ data class TripEntity(
     val maxSpeed: Float,
     val avgSpeed: Float,
     val energyUsed: Float,
-
-    // Speed stats
     val range0: Long,
     val range0_10: Long,
     val range10_20: Long,
@@ -38,15 +35,18 @@ data class TripEntity(
     val range40_50: Long,
     val range50_60: Long,
     val rangeAbove60: Long,
-
-    // Settings - NOMS DE VARIABLES CORRIGES
-    val ridingMode: String,      // ✅ C'est le NOM de la variable
-    val driveMode: String,        // ✅ C'est le NOM de la variable
-    val speedLock: String         // ✅ C'est le NOM de la variable
+    val ridingMode: String,
+    val driveMode: String,
+    val speedLock: String
 )
+
+// ===== DAO =====
 
 @Dao
 interface TripDao {
+    @Query("SELECT * FROM trips ORDER BY startDate DESC LIMIT 30")
+    fun getLast30Trips(): Flow<List<TripEntity>>
+
     @Query("SELECT * FROM trips ORDER BY startDate DESC")
     fun getAllTrips(): Flow<List<TripEntity>>
 
@@ -55,6 +55,9 @@ interface TripDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTrip(trip: TripEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTrips(trips: List<TripEntity>)
 
     @Delete
     suspend fun deleteTrip(trip: TripEntity)
@@ -65,6 +68,8 @@ interface TripDao {
     @Query("SELECT COUNT(*) FROM trips")
     suspend fun getTripCount(): Int
 }
+
+// ===== DATABASE =====
 
 @Database(entities = [TripEntity::class], version = 1, exportSchema = false)
 abstract class TripDatabase : RoomDatabase() {
@@ -88,7 +93,8 @@ abstract class TripDatabase : RoomDatabase() {
     }
 }
 
-// Convertisseurs - CORRIGES
+// ===== CONVERSIONS =====
+
 fun TripEntity.toTrip(): Trip {
     return Trip(
         id = id,
@@ -105,11 +111,14 @@ fun TripEntity.toTrip(): Trip {
         maxSpeed = maxSpeed,
         avgSpeed = avgSpeed,
         energyUsed = energyUsed,
-        speedStats = SpeedStats(range0, range0_10, range10_20, range20_30, range30_40, range40_50, range50_60, rangeAbove60),
+        speedStats = SpeedStats(
+            range0, range0_10, range10_20, range20_30,
+            range30_40, range40_50, range50_60, rangeAbove60
+        ),
         settings = TripSettings(
-            ridingMode = RideMode.valueOf(ridingMode),     // ✅ CORRIGE
-            driveMode = WheelMode.valueOf(driveMode),      // ✅ CORRIGE
-            speedLock = SpeedLimitMode.valueOf(speedLock)  // ✅ CORRIGE
+            ridingMode = com.ix7.tracker.core.RideMode.valueOf(ridingMode),
+            driveMode = com.ix7.tracker.core.WheelMode.valueOf(driveMode),
+            speedLock = com.ix7.tracker.core.SpeedLimitMode.valueOf(speedLock)
         )
     )
 }
@@ -142,8 +151,47 @@ fun Trip.toEntity(): TripEntity {
         range40_50 = speedStats.range40_50,
         range50_60 = speedStats.range50_60,
         rangeAbove60 = speedStats.rangeAbove60,
-        ridingMode = settings.ridingMode.name,    // ✅ CORRIGE
-        driveMode = settings.driveMode.name,      // ✅ CORRIGE
-        speedLock = settings.speedLock.name       // ✅ CORRIGE
+        ridingMode = settings.ridingMode.name,
+        driveMode = settings.driveMode.name,
+        speedLock = settings.speedLock.name
     )
+}
+
+// ===== REPOSITORY =====
+
+class TripRepository(context: Context) {
+    private val database = TripDatabase.getDatabase(context)
+    private val tripDao = database.tripDao()
+
+    val last30Trips: Flow<List<Trip>> = tripDao.getLast30Trips().map { entities ->
+        entities.map { it.toTrip() }
+    }
+
+    val allTrips: Flow<List<Trip>> = tripDao.getAllTrips().map { entities ->
+        entities.map { it.toTrip() }
+    }
+
+    suspend fun insertTrip(trip: Trip) {
+        tripDao.insertTrip(trip.toEntity())
+    }
+
+    suspend fun insertTrips(trips: List<Trip>) {
+        tripDao.insertTrips(trips.map { it.toEntity() })
+    }
+
+    suspend fun getTripById(id: String): Trip? {
+        return tripDao.getTripById(id)?.toTrip()
+    }
+
+    suspend fun deleteTrip(trip: Trip) {
+        tripDao.deleteTrip(trip.toEntity())
+    }
+
+    suspend fun deleteTrips(ids: List<String>) {
+        tripDao.deleteTrips(ids)
+    }
+
+    suspend fun getTripCount(): Int {
+        return tripDao.getTripCount()
+    }
 }

@@ -1,4 +1,4 @@
-package com.ix7.tracker.data.sync
+package com.ix7.tracker.data
 
 import com.ix7.tracker.core.RideMode
 import com.ix7.tracker.core.WheelMode

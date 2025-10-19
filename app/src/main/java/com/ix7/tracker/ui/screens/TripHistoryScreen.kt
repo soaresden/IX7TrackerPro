@@ -91,6 +91,11 @@ fun TripHistoryScreen() {
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
+
+        ModSyncWithWear()
+        Spacer(modifier = Modifier.height(12.dp))
+
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,

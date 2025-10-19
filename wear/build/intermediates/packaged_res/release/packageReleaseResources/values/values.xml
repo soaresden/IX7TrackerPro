@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="black">#FF000000</color>
-    <color name="green">#FF4CAF50</color>
-    <color name="ic_launcher_background">#0B4A6F</color>
-    <color name="white">#FFFFFFFF</color>
-    <string name="app_name">IX7 Watch</string>
-</resources>

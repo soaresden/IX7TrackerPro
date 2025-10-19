@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
+    kotlin("plugin.serialization") version "1.9.20"
 }
 
 android {
@@ -84,6 +85,9 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
+    // Serialization - NEUF
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
+
     // Permission handling
     implementation("androidx.activity:activity-ktx:1.8.2")
 
@@ -97,4 +101,8 @@ dependencies {
     // Debug tools
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+
+    // Sync avec Android Wear
+    implementation("com.google.android.gms:play-services-wearable:18.0.0")
+
 }

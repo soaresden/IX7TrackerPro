@@ -6,8 +6,10 @@ import com.google.android.gms.tasks.Tasks
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 import com.ix7.tracker.wear.data.database.AppDatabase
+import com.ix7.tracker.wear.data.model.Trip
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 class TripDataSyncService(private val context: Context) {
@@ -23,12 +25,13 @@ class TripDataSyncService(private val context: Context) {
                 return@withContext
             }
 
-            // Crée un DataMap avec les trips
-            val tripsJson = Json.encodeToString(pendingTrips)
+            // Sérialise les trips en JSON
+            val tripsJson = Json.encodeToString<List<Trip>>(pendingTrips)
+
             val putDataReq = PutDataMapRequest.create("/trips/sync").apply {
-                data.putLong("timestamp", System.currentTimeMillis())
-                data.putString("trips", tripsJson)
-                data.putInt("count", pendingTrips.size)
+                dataMap.putLong("timestamp", System.currentTimeMillis())
+                dataMap.putString("trips", tripsJson)
+                dataMap.putInt("count", pendingTrips.size)
             }.asPutDataRequest()
 
             // Marque comme urgent pour transmission immédiate
@@ -57,6 +60,8 @@ class TripDataSyncService(private val context: Context) {
                     tripDao.deleteOldestTrip()
                 }
                 Log.d("TRIP_SYNC", "Cleaned up trips. Kept last 30")
+            } else {
+                Log.d("TRIP_SYNC", "Trip count is OK (${count})")
             }
         } catch (e: Exception) {
             Log.e("TRIP_SYNC", "Error cleaning trips: ${e.message}", e)

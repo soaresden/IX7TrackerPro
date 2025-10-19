@@ -74,14 +74,20 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
+    // Room Database
+    implementation("androidx.room:room-runtime:2.5.1")
+    implementation("androidx.room:room-ktx:2.5.1")
+
+    // Kotlin Serialization
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1")
+
+    // Sync avec Android Wear
+    implementation("com.google.android.gms:play-services-wearable:18.0.0")
+
+    // BouncyCastle
+    implementation("org.bouncycastle:bcprov-jdk15on:1.70")
+
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
-
-    //BouncyCastle
-    implementation("org.bouncycastle:bcprov-jdk15on:1.70")
-
-
 }
-
-
